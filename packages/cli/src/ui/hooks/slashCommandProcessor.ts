@@ -313,9 +313,44 @@ export const useSlashCommandProcessor = (
                 }
                 case 'quit':
                   setQuittingMessages(result.messages);
-                  setTimeout(() => {
-                    process.exit(0);
-                  }, 100);
+                  
+                  // Run Stop hooks before exiting
+                  if (config) {
+                    (async () => {
+                      try {
+                        const { HooksManager } = await import('@google/gemini-cli-core');
+                        const hooksManager = new HooksManager(config);
+                        const hookContext = {
+                          sessionId: config.getSessionId(),
+                          transcriptPath: hooksManager.getTranscriptPath(),
+                        };
+                        
+                        // Calculate session duration
+                        const now = Date.now();
+                        const { sessionStartTime } = fullCommandContext.session.stats;
+                        const wallDuration = now - sessionStartTime.getTime();
+                        const { formatDuration } = await import('../utils/formatters.js');
+                        
+                        await hooksManager.runStop(
+                          `Session ended after ${formatDuration(wallDuration)}`,
+                          hookContext,
+                        );
+                      } catch (error) {
+                        // Log error but don't prevent exit
+                        console.error('Error running Stop hooks:', error);
+                      }
+                      
+                      // Exit after hooks complete
+                      setTimeout(() => {
+                        process.exit(0);
+                      }, 100);
+                    })();
+                  } else {
+                    // No config, just exit
+                    setTimeout(() => {
+                      process.exit(0);
+                    }, 100);
+                  }
                   return { type: 'handled' };
 
                 case 'submit_prompt':
