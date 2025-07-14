@@ -15,6 +15,7 @@ import {
   BugCommandSettings,
   TelemetrySettings,
   AuthType,
+  HooksConfiguration,
 } from '@google/gemini-cli-core';
 import stripJsonComments from 'strip-json-comments';
 import { DefaultLight } from '../ui/themes/default-light.js';
@@ -63,6 +64,26 @@ export interface AccessibilitySettings {
   disableLoadingPhrases?: boolean;
 }
 
+export interface HookConfig {
+  type: 'command';
+  command: string;
+  timeout?: number;
+}
+
+export interface HookMatcher {
+  matcher?: string;
+  hooks: HookConfig[];
+}
+
+export interface HooksConfiguration {
+  PreToolUse?: HookMatcher[];
+  PostToolUse?: HookMatcher[];
+  Notification?: HookMatcher[];
+  Stop?: HookMatcher[];
+  SubagentStop?: HookMatcher[];
+  PreCompact?: HookMatcher[];
+}
+
 export interface Settings {
   theme?: string;
   customThemes?: Record<string, CustomTheme>;
@@ -88,6 +109,9 @@ export interface Settings {
   autoConfigureMaxOldSpaceSize?: boolean;
   /** The model name to use (e.g 'gemini-9.0-pro') */
   model?: string;
+  
+  // Hooks configuration
+  hooks?: HooksConfiguration;
 
   // Git-aware file filtering settings
   fileFiltering?: {

@@ -483,6 +483,7 @@ export async function loadCliConfig(
     ideMode,
     ideModeFeature,
     folderTrustFeature,
+    hooks: settings.hooks,
   });
 }
 
