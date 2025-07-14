@@ -484,6 +484,7 @@ export async function loadCliConfig(
     ideModeFeature,
     chatCompression: settings.chatCompression,
     folderTrustFeature,
+    hooks: settings.hooks,
   });
 }
 
