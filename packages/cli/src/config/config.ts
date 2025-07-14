@@ -424,6 +424,7 @@ export async function loadCliConfig(
     summarizeToolOutput: settings.summarizeToolOutput,
     ideMode,
     ideClient,
+    hooks: settings.hooks,
   });
 }
 
