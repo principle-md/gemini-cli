@@ -539,6 +539,7 @@ export async function loadCliConfig(
     folderTrust,
     interactive,
     trustedFolder,
+    hooks: settings.hooks,
   });
 }
 

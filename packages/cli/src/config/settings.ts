@@ -11,6 +11,10 @@ import * as dotenv from 'dotenv';
 import {
   GEMINI_CONFIG_DIR as GEMINI_DIR,
   getErrorMessage,
+  BugCommandSettings,
+  TelemetrySettings,
+  AuthType,
+  HooksConfiguration,
 } from '@google/gemini-cli-core';
 import stripJsonComments from 'strip-json-comments';
 import { DefaultLight } from '../ui/themes/default-light.js';

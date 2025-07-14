@@ -50,6 +50,7 @@ import { IdeClient } from '../ide/ide-client.js';
 import type { Content } from '@google/genai';
 import { logIdeConnection } from '../telemetry/loggers.js';
 import { IdeConnectionEvent, IdeConnectionType } from '../telemetry/types.js';
+import { HooksConfiguration } from '../hooks/hooks-manager.js';
 
 // Re-export OAuth config type
 export type { MCPOAuthConfig };
@@ -150,6 +151,26 @@ export type FlashFallbackHandler = (
   error?: unknown,
 ) => Promise<boolean | string | null>;
 
+export interface HookConfig {
+  type: 'command';
+  command: string;
+  timeout?: number;
+}
+
+export interface HookMatcher {
+  matcher?: string;
+  hooks: HookConfig[];
+}
+
+export interface HooksConfiguration {
+  PreToolUse?: HookMatcher[];
+  PostToolUse?: HookMatcher[];
+  Notification?: HookMatcher[];
+  Stop?: HookMatcher[];
+  SubagentStop?: HookMatcher[];
+  PreCompact?: HookMatcher[];
+}
+
 export interface ConfigParameters {
   sessionId: string;
   embeddingModel?: string;
@@ -199,6 +220,7 @@ export interface ConfigParameters {
   chatCompression?: ChatCompressionSettings;
   interactive?: boolean;
   trustedFolder?: boolean;
+  hooks?: HooksConfiguration;
 }
 
 export class Config {
@@ -253,6 +275,7 @@ export class Config {
     name: string;
     extensionName: string;
   }>;
+  private readonly hooks: HooksConfiguration | undefined;
   flashFallbackHandler?: FlashFallbackHandler;
   private quotaErrorOccurred: boolean = false;
   private readonly summarizeToolOutput:
@@ -329,6 +352,7 @@ export class Config {
     this.chatCompression = params.chatCompression;
     this.interactive = params.interactive ?? false;
     this.trustedFolder = params.trustedFolder;
+    this.hooks = params.hooks;
 
     if (params.contextFileName) {
       setGeminiMdFilename(params.contextFileName);
@@ -709,6 +733,10 @@ export class Config {
 
   isInteractive(): boolean {
     return this.interactive;
+  }
+
+  getHooks(): HooksConfiguration | undefined {
+    return this.hooks;
   }
 
   async getGitService(): Promise<GitService> {
