@@ -43,6 +43,37 @@ With the Gemini CLI you can:
 
 You are now ready to use the Gemini CLI!
 
+## Running from Local Development
+
+If you've cloned this repository and want to run your local version (e.g., to test modifications or add features like hooks):
+
+1. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+2. **Build the project:**
+   ```bash
+   npm run build
+   ```
+
+3. **Run the CLI locally:**
+   ```bash
+   npm start
+   ```
+
+4. **Make it globally available** (optional):
+   
+   Using npm link:
+   ```bash
+   npm link
+   ```
+   
+   Or create an alias in your shell config:
+   ```bash
+   alias gemini="node /path/to/gemini-cli/bundle/gemini.js"
+   ```
+
 ### Use a Gemini API key:
 
 The Gemini API provides a free tier with [100 requests per day](https://ai.google.dev/gemini-api/docs/rate-limits#free-tier) using Gemini 2.5 Pro, control over which model you use, and access to higher rate limits (with a paid plan):
