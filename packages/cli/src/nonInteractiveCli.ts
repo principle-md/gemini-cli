@@ -13,6 +13,7 @@ import {
   isTelemetrySdkInitialized,
   GeminiEventType,
   ToolErrorType,
+  HooksManager,
 } from '@google/gemini-cli-core';
 import { Content, Part, FunctionCall } from '@google/genai';
 
@@ -130,6 +131,23 @@ export async function runNonInteractive(
         currentMessages = [{ role: 'user', parts: toolResponseParts }];
       } else {
         process.stdout.write('\n'); // Ensure a final newline
+        
+        // Run Stop hooks before exiting
+        try {
+          const hooksManager = new HooksManager(config);
+          const hookContext = {
+            sessionId: config.getSessionId(),
+            transcriptPath: hooksManager.getTranscriptPath(),
+          };
+          await hooksManager.runStop(
+            'Non-interactive session completed',
+            hookContext,
+          );
+        } catch (error) {
+          // Log error but don't prevent exit
+          console.error('Error running Stop hooks:', error);
+        }
+        
         return;
       }
     }
@@ -140,6 +158,22 @@ export async function runNonInteractive(
         config.getContentGeneratorConfig()?.authType,
       ),
     );
+    
+    // Run Stop hooks even on error
+    try {
+      const hooksManager = new HooksManager(config);
+      const hookContext = {
+        sessionId: config.getSessionId(),
+        transcriptPath: hooksManager.getTranscriptPath(),
+      };
+      await hooksManager.runStop(
+        'Non-interactive session ended with error',
+        hookContext,
+      );
+    } catch (hookError) {
+      console.error('Error running Stop hooks:', hookError);
+    }
+    
     process.exit(1);
   } finally {
     consolePatcher.cleanup();
