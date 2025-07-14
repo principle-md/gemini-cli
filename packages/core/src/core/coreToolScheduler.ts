@@ -27,6 +27,7 @@ import {
   modifyWithEditor,
 } from '../tools/modifiable-tool.js';
 import * as Diff from 'diff';
+import { HooksManager, HookExecutionContext } from '../hooks/index.js';
 
 export type ValidatingToolCall = {
   status: 'validating';
@@ -232,6 +233,7 @@ export class CoreToolScheduler {
   private approvalMode: ApprovalMode;
   private getPreferredEditor: () => EditorType | undefined;
   private config: Config;
+  private hooksManager: HooksManager;
 
   constructor(options: CoreToolSchedulerOptions) {
     this.config = options.config;
@@ -241,6 +243,7 @@ export class CoreToolScheduler {
     this.onToolCallsUpdate = options.onToolCallsUpdate;
     this.approvalMode = options.approvalMode ?? ApprovalMode.DEFAULT;
     this.getPreferredEditor = options.getPreferredEditor;
+    this.hooksManager = new HooksManager(this.config);
   }
 
   private setStatusInternal(
@@ -445,6 +448,30 @@ export class CoreToolScheduler {
 
       const { request: reqInfo, tool: toolInstance } = toolCall;
       try {
+        // Run PreToolUse hooks
+        const hookContext: HookExecutionContext = {
+          sessionId: this.config.getSessionId(),
+          transcriptPath: this.hooksManager.getTranscriptPath(),
+        };
+        
+        const hookResult = await this.hooksManager.runPreToolUse(
+          reqInfo,
+          hookContext,
+          signal,
+        );
+
+        if (hookResult.shouldBlock) {
+          this.setStatusInternal(
+            reqInfo.callId,
+            'error',
+            createErrorResponse(
+              reqInfo,
+              new Error(`Hook blocked execution: ${hookResult.blockReason}`),
+            ),
+          );
+          continue;
+        }
+
         if (this.approvalMode === ApprovalMode.YOLO) {
           this.setStatusInternal(reqInfo.callId, 'scheduled');
         } else {
@@ -669,17 +696,41 @@ export class CoreToolScheduler {
             };
 
             this.setStatusInternal(callId, 'success', successResponse);
+
+            // Run PostToolUse hooks
+            const hookContext: HookExecutionContext = {
+              sessionId: this.config.getSessionId(),
+              transcriptPath: this.hooksManager.getTranscriptPath(),
+            };
+            
+            await this.hooksManager.runPostToolUse(
+              scheduledCall.request,
+              successResponse,
+              hookContext,
+              signal,
+            );
           })
-          .catch((executionError: Error) => {
-            this.setStatusInternal(
-              callId,
-              'error',
-              createErrorResponse(
-                scheduledCall.request,
-                executionError instanceof Error
-                  ? executionError
-                  : new Error(String(executionError)),
-              ),
+          .catch(async (executionError: Error) => {
+            const errorResponse = createErrorResponse(
+              scheduledCall.request,
+              executionError instanceof Error
+                ? executionError
+                : new Error(String(executionError)),
+            );
+            
+            this.setStatusInternal(callId, 'error', errorResponse);
+
+            // Run PostToolUse hooks for errors too
+            const hookContext: HookExecutionContext = {
+              sessionId: this.config.getSessionId(),
+              transcriptPath: this.hooksManager.getTranscriptPath(),
+            };
+            
+            await this.hooksManager.runPostToolUse(
+              scheduledCall.request,
+              errorResponse,
+              hookContext,
+              signal,
             );
           });
       });

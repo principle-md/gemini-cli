@@ -107,6 +107,26 @@ export type FlashFallbackHandler = (
   error?: unknown,
 ) => Promise<boolean | string | null>;
 
+export interface HookConfig {
+  type: 'command';
+  command: string;
+  timeout?: number;
+}
+
+export interface HookMatcher {
+  matcher?: string;
+  hooks: HookConfig[];
+}
+
+export interface HooksConfiguration {
+  PreToolUse?: HookMatcher[];
+  PostToolUse?: HookMatcher[];
+  Notification?: HookMatcher[];
+  Stop?: HookMatcher[];
+  SubagentStop?: HookMatcher[];
+  PreCompact?: HookMatcher[];
+}
+
 export interface ConfigParameters {
   sessionId: string;
   embeddingModel?: string;
@@ -145,6 +165,7 @@ export interface ConfigParameters {
   activeExtensions?: ActiveExtension[];
   noBrowser?: boolean;
   ideMode?: boolean;
+  hooks?: HooksConfiguration;
 }
 
 export class Config {
@@ -189,6 +210,7 @@ export class Config {
   private readonly maxSessionTurns: number;
   private readonly listExtensions: boolean;
   private readonly _activeExtensions: ActiveExtension[];
+  private readonly hooks: HooksConfiguration | undefined;
   flashFallbackHandler?: FlashFallbackHandler;
   private quotaErrorOccurred: boolean = false;
 
@@ -237,6 +259,7 @@ export class Config {
     this._activeExtensions = params.activeExtensions ?? [];
     this.noBrowser = params.noBrowser ?? false;
     this.ideMode = params.ideMode ?? false;
+    this.hooks = params.hooks;
 
     if (params.contextFileName) {
       setGeminiMdFilename(params.contextFileName);
@@ -499,6 +522,10 @@ export class Config {
 
   getIdeMode(): boolean {
     return this.ideMode;
+  }
+
+  getHooks(): HooksConfiguration | undefined {
+    return this.hooks;
   }
 
   async getGitService(): Promise<GitService> {

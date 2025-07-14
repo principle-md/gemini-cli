@@ -363,6 +363,7 @@ export async function loadCliConfig(
     })),
     noBrowser: !!process.env.NO_BROWSER,
     ideMode,
+    hooks: settings.hooks,
   });
 }
 
