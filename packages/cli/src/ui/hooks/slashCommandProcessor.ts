@@ -838,6 +838,24 @@ export const useSlashCommandProcessor = (
             },
           ]);
 
+          // Run Stop hooks before exiting
+          if (config) {
+            try {
+              const hooksManager = new (await import('@google/gemini-cli-core')).HooksManager(config);
+              const hookContext = {
+                sessionId: config.getSessionId(),
+                transcriptPath: hooksManager.getTranscriptPath(),
+              };
+              await hooksManager.runStop(
+                `Session ended after ${formatDuration(wallDuration)}`,
+                hookContext,
+              );
+            } catch (error) {
+              // Log error but don't prevent exit
+              console.error('Error running Stop hooks:', error);
+            }
+          }
+
           setTimeout(() => {
             process.exit(0);
           }, 100);
