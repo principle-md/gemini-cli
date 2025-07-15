@@ -16,6 +16,7 @@ import {
 } from './types.js';
 import { ToolCallRequestInfo, ToolCallResponseInfo } from '../index.js';
 import * as path from 'path';
+import * as os from 'os';
 
 export interface HookExecutionContext {
   sessionId: string;
@@ -37,13 +38,13 @@ export class HooksManager {
     signal?: AbortSignal,
   ): Promise<{ shouldBlock: boolean; blockReason?: string }> {
     const hookMatchers = this.hooks.PreToolUse;
+    
     if (!hookMatchers || hookMatchers.length === 0) {
       return { shouldBlock: false };
     }
 
     const input: PreToolUseHookInput = {
-      session_id: context.sessionId,
-      transcript_path: context.transcriptPath,
+      ...this.createBaseHookInput(context),
       hook_event_name: HookEventName.PreToolUse,
       tool_name: toolRequest.name,
       tool_input: toolRequest.args,
@@ -85,13 +86,13 @@ export class HooksManager {
     signal?: AbortSignal,
   ): Promise<void> {
     const hookMatchers = this.hooks.PostToolUse;
+    
     if (!hookMatchers || hookMatchers.length === 0) {
       return;
     }
 
     const input: PostToolUseHookInput = {
-      session_id: context.sessionId,
-      transcript_path: context.transcriptPath,
+      ...this.createBaseHookInput(context),
       hook_event_name: HookEventName.PostToolUse,
       tool_name: toolRequest.name,
       tool_input: toolRequest.args,
@@ -120,8 +121,7 @@ export class HooksManager {
     }
 
     const input: HookInput = {
-      session_id: context.sessionId,
-      transcript_path: context.transcriptPath,
+      ...this.createBaseHookInput(context),
       hook_event_name: HookEventName.Stop,
       final_message: finalMessage,
     };
@@ -166,7 +166,7 @@ export class HooksManager {
           if (regex.test(toolName)) {
             matchingHooks.push(...matcher.hooks);
           }
-        } catch {
+        } catch (e) {
           // If regex is invalid, do exact match
           if (toolName === matcher.matcher) {
             matchingHooks.push(...matcher.hooks);
@@ -175,6 +175,7 @@ export class HooksManager {
       }
     }
 
+
     return matchingHooks;
   }
 
@@ -182,5 +183,20 @@ export class HooksManager {
     // This would be implemented to return the actual transcript path
     // For now, return a placeholder
     return path.join(this.config.getProjectTempDir(), 'transcript.json');
+  }
+
+  private createBaseHookInput(context: HookExecutionContext): Pick<import('./types.js').BaseHookInput, 'session_id' | 'transcript_path' | 'agent_type' | 'metadata'> {
+    return {
+      session_id: context.sessionId,
+      transcript_path: context.transcriptPath,
+      agent_type: 'gemini',
+      metadata: {
+        timestamp: Date.now(),
+        user: os.userInfo().username,
+        hostname: os.hostname(),
+        platform: os.platform(),
+        nodeVersion: process.version,
+      },
+    };
   }
 }

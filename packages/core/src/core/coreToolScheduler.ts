@@ -935,6 +935,7 @@ export class CoreToolScheduler {
               transcriptPath: this.hooksManager.getTranscriptPath(),
             };
             
+            
             await this.hooksManager.runPostToolUse(
               scheduledCall.request,
               errorResponse,

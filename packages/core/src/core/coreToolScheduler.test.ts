@@ -53,6 +53,8 @@ describe('CoreToolScheduler', () => {
       getUsageStatisticsEnabled: () => true,
       getDebugMode: () => false,
       getApprovalMode: () => ApprovalMode.DEFAULT,
+      getHooks: () => ({}),  // Empty hooks by default
+      getProjectTempDir: () => '/tmp',
     } as unknown as Config;
 
     const scheduler = new CoreToolScheduler({
@@ -109,6 +111,8 @@ describe('CoreToolScheduler with payload', () => {
       getUsageStatisticsEnabled: () => true,
       getDebugMode: () => false,
       getApprovalMode: () => ApprovalMode.DEFAULT,
+      getHooks: () => ({}),  // Empty hooks by default
+      getProjectTempDir: () => '/tmp',
     } as unknown as Config;
 
     const scheduler = new CoreToolScheduler({
