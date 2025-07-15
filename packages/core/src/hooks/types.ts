@@ -19,6 +19,14 @@ export interface BaseHookInput {
   session_id: string;
   transcript_path?: string;
   hook_event_name: HookEventName;
+  agent_type: string;
+  metadata?: {
+    timestamp: number;
+    user?: string;
+    hostname?: string;
+    platform?: string;
+    nodeVersion?: string;
+  };
 }
 
 export interface PreToolUseHookInput extends BaseHookInput {
