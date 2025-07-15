@@ -123,14 +123,18 @@ The `matcher` field supports:
 - Regex patterns: `"replace|write_file"`, `".*"` (matches all tools)
 - Case-sensitive matching
 
-Common tool names:
+Complete list of built-in tool names:
 - `run_shell_command` - Execute shell commands
 - `read_file` - Read file contents
-- `replace` - Edit/replace text in files
 - `write_file` - Write new files
-- `list_files` - List directory contents
-- `grep` - Search file contents
+- `replace` - Edit/replace text in files (EditTool)
+- `read_many_files` - Read multiple files at once
+- `list_directory` - List directory contents (LSTool)
+- `search_file_content` - Search file contents (GrepTool)
 - `glob` - Find files by pattern
+- `web_fetch` - Fetch web content
+- `google_web_search` - Search Google
+- `save_memory` - Save information to memory
 
 ## Examples
 
