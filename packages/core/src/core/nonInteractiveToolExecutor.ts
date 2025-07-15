@@ -15,6 +15,7 @@ import {
 import { Config } from '../config/config.js';
 import { convertToFunctionResponse } from './coreToolScheduler.js';
 import { ToolCallDecision } from '../telemetry/types.js';
+import { HooksManager, HookExecutionContext } from '../hooks/index.js';
 
 /**
  * Executes a single tool call non-interactively.
@@ -27,6 +28,13 @@ export async function executeToolCall(
   abortSignal?: AbortSignal,
 ): Promise<ToolCallResponseInfo> {
   const tool = toolRegistry.getTool(toolCallRequest.name);
+  const hooksManager = new HooksManager(config);
+
+  const hookContext: HookExecutionContext = {
+    sessionId: config.getSessionId(),
+    transcriptPath: hooksManager.getTranscriptPath(),
+  };
+  
 
   const startTime = Date.now();
   if (!tool) {
@@ -63,6 +71,42 @@ export async function executeToolCall(
   }
 
   try {
+    // Run PreToolUse hooks
+    const hookResult = await hooksManager.runPreToolUse(
+      toolCallRequest,
+      hookContext,
+      abortSignal,
+    );
+
+    if (hookResult.shouldBlock) {
+      const error = new Error(`Hook blocked execution: ${hookResult.blockReason}`);
+      const durationMs = Date.now() - startTime;
+      logToolCall(config, {
+        'event.name': 'tool_call',
+        'event.timestamp': new Date().toISOString(),
+        function_name: toolCallRequest.name,
+        function_args: toolCallRequest.args,
+        duration_ms: durationMs,
+        success: false,
+        error: error.message,
+        prompt_id: toolCallRequest.prompt_id,
+      });
+      return {
+        callId: toolCallRequest.callId,
+        responseParts: [
+          {
+            functionResponse: {
+              id: toolCallRequest.callId,
+              name: toolCallRequest.name,
+              response: { error: error.message },
+            },
+          },
+        ],
+        resultDisplay: error.message,
+        error,
+      };
+    }
+
     // Directly execute without confirmation or live output handling
     const effectiveAbortSignal = abortSignal ?? new AbortController().signal;
     const toolResult: ToolResult = await tool.buildAndExecute(
@@ -97,7 +141,7 @@ export async function executeToolCall(
       tool_output,
     );
 
-    return {
+    const toolResponse: ToolCallResponseInfo = {
       callId: toolCallRequest.callId,
       responseParts: response,
       resultDisplay: tool_display,
@@ -108,6 +152,16 @@ export async function executeToolCall(
       errorType:
         toolResult.error === undefined ? undefined : toolResult.error.type,
     };
+
+    // Run PostToolUse hooks
+    await hooksManager.runPostToolUse(
+      toolCallRequest,
+      toolResponse,
+      hookContext,
+      abortSignal,
+    );
+
+    return toolResponse;
   } catch (e) {
     const error = e instanceof Error ? e : new Error(String(e));
     const durationMs = Date.now() - startTime;
@@ -122,7 +176,8 @@ export async function executeToolCall(
       error_type: ToolErrorType.UNHANDLED_EXCEPTION,
       prompt_id: toolCallRequest.prompt_id,
     });
-    return {
+    
+    const errorResponse: ToolCallResponseInfo = {
       callId: toolCallRequest.callId,
       responseParts: [
         {
@@ -137,5 +192,15 @@ export async function executeToolCall(
       error,
       errorType: ToolErrorType.UNHANDLED_EXCEPTION,
     };
+
+    // Run PostToolUse hooks even on error
+    await hooksManager.runPostToolUse(
+      toolCallRequest,
+      errorResponse,
+      hookContext,
+      abortSignal,
+    );
+
+    return errorResponse;
   }
 }
