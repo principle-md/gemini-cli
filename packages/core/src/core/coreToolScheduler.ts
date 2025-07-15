@@ -471,6 +471,7 @@ export class CoreToolScheduler {
           transcriptPath: this.hooksManager.getTranscriptPath(),
         };
         
+        
         const hookResult = await this.hooksManager.runPreToolUse(
           reqInfo,
           hookContext,
@@ -720,6 +721,7 @@ export class CoreToolScheduler {
               transcriptPath: this.hooksManager.getTranscriptPath(),
             };
             
+            
             await this.hooksManager.runPostToolUse(
               scheduledCall.request,
               successResponse,
@@ -742,6 +744,7 @@ export class CoreToolScheduler {
               sessionId: this.config.getSessionId(),
               transcriptPath: this.hooksManager.getTranscriptPath(),
             };
+            
             
             await this.hooksManager.runPostToolUse(
               scheduledCall.request,
