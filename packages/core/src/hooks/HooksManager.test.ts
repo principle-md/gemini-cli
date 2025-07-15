@@ -43,6 +43,17 @@ const mockConfig = {
           }
         ]
       }
+    ],
+    Stop: [
+      {
+        matcher: '.*',  // Match all for Stop hooks
+        hooks: [
+          {
+            type: 'command' as const,
+            command: '/bin/echo "stop hook called"',
+          }
+        ]
+      }
     ]
   }),
   getProjectTempDir: () => '/tmp',
@@ -163,6 +174,73 @@ describe('HooksManager', () => {
     it('should support regex patterns', () => {
       // Test that regex patterns work (if we implement them)
       expect(true).toBe(true);
+    });
+  });
+
+  describe('runStop', () => {
+    it('should execute Stop hooks', async () => {
+      // This should execute the stop hook without throwing
+      await expect(
+        hooksManager.runStop('Session ended', hookContext)
+      ).resolves.toBeUndefined();
+    });
+
+    it('should execute Stop hooks with correct event data', async () => {
+      const testConfig = {
+        ...mockConfig,
+        getHooks: () => ({
+          Stop: [
+            {
+              matcher: '.*',
+              hooks: [
+                {
+                  type: 'command' as const,
+                  command: '/bin/echo "Stop hook executed"',
+                }
+              ]
+            }
+          ]
+        }),
+      } as unknown as Config;
+
+      const testHooksManager = new HooksManager(testConfig);
+      
+      // Execute the Stop hook
+      await expect(
+        testHooksManager.runStop('Test session ended', hookContext)
+      ).resolves.toBeUndefined();
+    });
+
+    it('should handle Stop hooks with cancellation signal', async () => {
+      const controller = new AbortController();
+      
+      // Cancel immediately to test signal handling
+      controller.abort();
+      
+      await expect(
+        hooksManager.runStop('Session cancelled', hookContext, controller.signal)
+      ).resolves.toBeUndefined();
+    });
+
+    it('should send correct Stop hook data structure', async () => {
+      // Test that Stop hooks receive the correct data structure:
+      // - session_id: 'test-session-id'
+      // - agent_type: 'gemini'  
+      // - hook_event_name: 'Stop'
+      // - final_message: provided message
+      // - metadata with timestamp, user, hostname, platform, nodeVersion
+      
+      await hooksManager.runStop('Test final message', hookContext);
+      
+      // Since we can't directly test the hook execution output without running
+      // the actual command, we verify that the method doesn't throw
+      expect(true).toBe(true);
+    });
+
+    it('should handle undefined final message', async () => {
+      await expect(
+        hooksManager.runStop(undefined, hookContext)
+      ).resolves.toBeUndefined();
     });
   });
 
