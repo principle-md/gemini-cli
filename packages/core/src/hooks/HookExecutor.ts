@@ -25,6 +25,7 @@ export class HookExecutor {
   ): Promise<HookExecutionResult> {
     const timeout = hook.timeout ?? DEFAULT_HOOK_TIMEOUT;
     const inputJson = JSON.stringify(input);
+    
 
     return new Promise<HookExecutionResult>((resolve) => {
       let stdout = '';
