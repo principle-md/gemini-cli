@@ -20,6 +20,12 @@ vi.mock('@google/gemini-cli-core', async () => {
     GeminiClient: vi.fn(),
     ToolRegistry: vi.fn(),
     executeToolCall: vi.fn(),
+    HooksManager: vi.fn(() => ({
+      runStop: vi.fn().mockResolvedValue(undefined),
+      runPreToolUse: vi.fn().mockResolvedValue({ shouldBlock: false }),
+      runPostToolUse: vi.fn().mockResolvedValue(undefined),
+      getTranscriptPath: vi.fn().mockReturnValue('/tmp/transcript.json'),
+    })),
   };
 });
 
@@ -27,13 +33,14 @@ describe('runNonInteractive', () => {
   let mockConfig: Config;
   let mockGeminiClient: GeminiClient;
   let mockToolRegistry: ToolRegistry;
+  let mockHooksManager: any;
   let mockChat: {
     sendMessageStream: ReturnType<typeof vi.fn>;
   };
   let mockProcessStdoutWrite: ReturnType<typeof vi.fn>;
   let mockProcessExit: ReturnType<typeof vi.fn>;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetAllMocks();
     mockChat = {
       sendMessageStream: vi.fn(),
@@ -45,15 +52,25 @@ describe('runNonInteractive', () => {
       getFunctionDeclarations: vi.fn().mockReturnValue([]),
       getTool: vi.fn(),
     } as unknown as ToolRegistry;
+    
+    mockHooksManager = {
+      runStop: vi.fn().mockResolvedValue(undefined),
+      runPreToolUse: vi.fn().mockResolvedValue({ shouldBlock: false }),
+      runPostToolUse: vi.fn().mockResolvedValue(undefined),
+      getTranscriptPath: vi.fn().mockReturnValue('/tmp/transcript.json'),
+    };
 
     vi.mocked(GeminiClient).mockImplementation(() => mockGeminiClient);
     vi.mocked(ToolRegistry).mockImplementation(() => mockToolRegistry);
+    const { HooksManager } = vi.mocked(await import('@google/gemini-cli-core'));
+    vi.mocked(HooksManager).mockImplementation(() => mockHooksManager);
 
     mockConfig = {
       getToolRegistry: vi.fn().mockReturnValue(mockToolRegistry),
       getGeminiClient: vi.fn().mockReturnValue(mockGeminiClient),
       getContentGeneratorConfig: vi.fn().mockReturnValue({}),
       getMaxSessionTurns: vi.fn().mockReturnValue(10),
+      getSessionId: vi.fn().mockReturnValue('test-session-id'),
       initialize: vi.fn(),
     } as unknown as Config;
 
@@ -340,5 +357,79 @@ describe('runNonInteractive', () => {
  Reached max session turns for this session. Increase the number of turns by specifying maxSessionTurns in settings.json.`,
     );
     expect(mockProcessExit).not.toHaveBeenCalled();
+  });
+
+  it('should call runStop when session completes successfully', async () => {
+    const inputStream = (async function* () {
+      yield {
+        candidates: [{ content: { parts: [{ text: 'Goodbye!' }] } }],
+      } as GenerateContentResponse;
+    })();
+    mockChat.sendMessageStream.mockResolvedValue(inputStream);
+
+    await runNonInteractive(mockConfig, 'Say goodbye', 'prompt-id-stop-1');
+
+    expect(mockHooksManager.runStop).toHaveBeenCalledTimes(1);
+    expect(mockHooksManager.runStop).toHaveBeenCalledWith(
+      'Non-interactive session completed',
+      {
+        sessionId: 'test-session-id',
+        transcriptPath: '/tmp/transcript.json',
+      },
+    );
+  });
+
+  it('should call runStop when session encounters an error', async () => {
+    const errorMessage = 'Test error occurred';
+    const errorStream = (async function* () {
+      throw new Error(errorMessage);
+    })();
+    mockChat.sendMessageStream.mockResolvedValue(errorStream);
+
+    const consoleErrorSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
+
+    await runNonInteractive(mockConfig, 'Trigger error', 'prompt-id-stop-2');
+
+    expect(mockHooksManager.runStop).toHaveBeenCalledTimes(1);
+    expect(mockHooksManager.runStop).toHaveBeenCalledWith(
+      'Non-interactive session ended with error',
+      {
+        sessionId: 'test-session-id',
+        transcriptPath: '/tmp/transcript.json',
+      },
+    );
+    
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining(errorMessage),
+    );
+  });
+
+  it('should not block execution if runStop fails', async () => {
+    const inputStream = (async function* () {
+      yield {
+        candidates: [{ content: { parts: [{ text: 'Hello' }] } }],
+      } as GenerateContentResponse;
+    })();
+    mockChat.sendMessageStream.mockResolvedValue(inputStream);
+    
+    // Make runStop reject
+    mockHooksManager.runStop.mockRejectedValueOnce(new Error('Hook failed'));
+    
+    const consoleErrorSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
+
+    await runNonInteractive(mockConfig, 'Test input', 'prompt-id-stop-3');
+
+    expect(mockHooksManager.runStop).toHaveBeenCalledTimes(1);
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      'Error running Stop hooks:',
+      expect.any(Error),
+    );
+    // Process should continue normally despite hook failure
+    expect(mockProcessStdoutWrite).toHaveBeenCalledWith('Hello');
+    expect(mockProcessStdoutWrite).toHaveBeenCalledWith('\n');
   });
 });
