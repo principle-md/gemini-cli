@@ -103,6 +103,61 @@ The Vertex AI API provides a [free tier](https://cloud.google.com/vertex-ai/gene
 
 For other authentication methods, including Google Workspace accounts, see the [authentication](./docs/cli/authentication.md) guide.
 
+## Hooks System
+
+Gemini CLI includes a hooks system that allows you to run custom scripts in response to various events during CLI operation. This enables workflow automation, logging, monitoring, and integration with external tools.
+
+### Configuration
+
+Hooks are configured in your settings file (`~/.gemini/settings.json`):
+
+```json
+{
+  "hooks": [
+    {
+      "name": "file-tracker",
+      "command": "/path/to/your/hook-script.js",
+      "events": ["PreToolUse", "PostToolUse"],
+      "tools": ["read_file", "write_file", "replace"]
+    }
+  ]
+}
+```
+
+### Hook Events
+
+- **PreToolUse**: Called before a tool is executed
+- **PostToolUse**: Called after a tool completes
+- **Stop**: Called when the CLI session ends
+- **Notification**: Called for system notifications  
+- **SubagentStop**: Called when a subagent stops
+- **PreCompact**: Called before conversation compaction
+
+### Hook Script Format
+
+Hook scripts receive JSON input via stdin and should exit with status code 0 for success or 2 to block execution:
+
+```javascript
+#!/usr/bin/env node
+const fs = require('fs');
+
+// Read hook data from stdin
+let inputData = '';
+process.stdin.on('data', chunk => inputData += chunk);
+process.stdin.on('end', () => {
+  const data = JSON.parse(inputData);
+  
+  // Process the hook data
+  console.log(`Tool used: ${data.tool_name}`);
+  console.log(`Agent: ${data.agent_type}`); // 'gemini'
+  
+  // Exit with 0 for success, 2 to block
+  process.exit(0);
+});
+```
+
+The hooks system is compatible with Claude Code hooks, allowing you to use the same hook scripts across both tools.
+
 ## Examples
 
 Once the CLI is running, you can start interacting with Gemini from your shell.
