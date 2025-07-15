@@ -9,7 +9,7 @@ hook_event=$(echo "$input" | jq -r '.hook_event_name')
 tool_name=$(echo "$input" | jq -r '.tool_name')
 
 if [[ "$hook_event" == "PostToolUse" ]]; then
-    if [[ "$tool_name" == "Edit" ]] || [[ "$tool_name" == "WriteFile" ]]; then
+    if [[ "$tool_name" == "replace" ]] || [[ "$tool_name" == "write_file" ]]; then
         # Extract file path from tool input
         file_path=$(echo "$input" | jq -r '.tool_input.file_path // ""')
         

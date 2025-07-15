@@ -10,7 +10,7 @@ hook_event=$(echo "$input" | jq -r '.hook_event_name')
 
 if [[ "$hook_event" == "PreToolUse" ]]; then
     case "$tool_name" in
-        "Shell")
+        "run_shell_command")
             command=$(echo "$input" | jq -r '.tool_input.command // ""')
             
             # Block dangerous commands
@@ -27,7 +27,7 @@ if [[ "$hook_event" == "PreToolUse" ]]; then
             fi
             ;;
             
-        "WriteFile"|"Edit")
+        "write_file"|"replace")
             file_path=$(echo "$input" | jq -r '.tool_input.file_path // ""')
             
             # Block writes to sensitive files
