@@ -15,7 +15,7 @@ mkdir -p "$(dirname "$log_file")"
 # Get current timestamp
 timestamp=$(date "+%Y-%m-%d %H:%M:%S")
 
-if [[ "$hook_event" == "PreToolUse" ]] && [[ "$tool_name" == "Shell" ]]; then
+if [[ "$hook_event" == "PreToolUse" ]] && [[ "$tool_name" == "run_shell_command" ]]; then
     # Extract command and description from tool input
     command=$(echo "$input" | jq -r '.tool_input.command // "N/A"')
     description=$(echo "$input" | jq -r '.tool_input.description // "No description"')
@@ -29,7 +29,7 @@ if [[ "$hook_event" == "PreToolUse" ]] && [[ "$tool_name" == "Shell" ]]; then
         echo "Dangerous command blocked: $command" >&2
         exit 2  # Exit code 2 blocks execution
     fi
-elif [[ "$hook_event" == "PostToolUse" ]] && [[ "$tool_name" == "Shell" ]]; then
+elif [[ "$hook_event" == "PostToolUse" ]] && [[ "$tool_name" == "run_shell_command" ]]; then
     # Log command completion
     command=$(echo "$input" | jq -r '.tool_input.command // "N/A"')
     error=$(echo "$input" | jq -r '.tool_response.error // null')

@@ -123,6 +123,8 @@ describe('CoreToolScheduler', () => {
       getSessionId: () => 'test-session-id',
       getUsageStatisticsEnabled: () => true,
       getDebugMode: () => false,
+      getHooks: () => ({}),  // Empty hooks by default
+      getProjectTempDir: () => '/tmp',
     } as unknown as Config;
 
     const scheduler = new CoreToolScheduler({
@@ -191,6 +193,8 @@ describe('CoreToolScheduler with payload', () => {
       getSessionId: () => 'test-session-id',
       getUsageStatisticsEnabled: () => true,
       getDebugMode: () => false,
+      getHooks: () => ({}),  // Empty hooks by default
+      getProjectTempDir: () => '/tmp',
     } as unknown as Config;
 
     const scheduler = new CoreToolScheduler({

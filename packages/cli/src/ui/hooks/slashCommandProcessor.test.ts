@@ -95,6 +95,10 @@ vi.mock('@google/gemini-cli-core', async (importOriginal) => {
     ...actual,
     getMCPServerStatus: vi.fn(),
     getMCPDiscoveryState: vi.fn(),
+    HooksManager: vi.fn(() => ({
+      runStop: vi.fn().mockResolvedValue(undefined),
+      getTranscriptPath: vi.fn().mockReturnValue('/tmp/transcript.json'),
+    })),
   };
 });
 
@@ -747,6 +751,83 @@ describe('useSlashCommandProcessor', () => {
         expect(mockProcessExit).toHaveBeenCalledWith(0);
       },
     );
+
+    it.each([['/quit'], ['/exit']])(
+      'should call runStop hooks before exiting on %s command',
+      async (command) => {
+        const { HooksManager } = await import('@google/gemini-cli-core');
+        const mockRunStop = vi.fn().mockResolvedValue(undefined);
+        const mockGetTranscriptPath = vi.fn().mockReturnValue('/tmp/transcript.json');
+        
+        vi.mocked(HooksManager).mockImplementation(() => ({
+          runStop: mockRunStop,
+          getTranscriptPath: mockGetTranscriptPath,
+        }));
+        
+        const { handleSlashCommand } = getProcessor();
+        const mockDate = new Date('2025-01-01T01:02:03.000Z');
+        vi.setSystemTime(mockDate);
+
+        await act(async () => {
+          handleSlashCommand(command);
+        });
+
+        // Wait for async operations to complete
+        await act(async () => {
+          await vi.runAllTimersAsync();
+        });
+
+        // Verify HooksManager was instantiated with the config
+        expect(HooksManager).toHaveBeenCalledWith(mockConfig);
+
+        // Verify runStop was called with correct parameters
+        expect(mockRunStop).toHaveBeenCalledWith(
+          'Session ended after 1h 2m 3s',
+          expect.objectContaining({
+            sessionId: 'test-session-id',
+            transcriptPath: '/tmp/transcript.json',
+          }),
+        );
+
+        // Verify process.exit was called after hooks
+        expect(mockProcessExit).toHaveBeenCalledWith(0);
+      },
+    );
+
+    it('should handle error in runStop hooks gracefully', async () => {
+      const { HooksManager } = await import('@google/gemini-cli-core');
+      const mockRunStop = vi.fn().mockRejectedValue(new Error('Hook failed'));
+      const mockGetTranscriptPath = vi.fn().mockReturnValue('/tmp/transcript.json');
+      
+      vi.mocked(HooksManager).mockImplementation(() => ({
+        runStop: mockRunStop,
+        getTranscriptPath: mockGetTranscriptPath,
+      }));
+      
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      
+      const { handleSlashCommand } = getProcessor();
+      
+      await act(async () => {
+        handleSlashCommand('/quit');
+      });
+
+      // Wait for async operations
+      await act(async () => {
+        await vi.runAllTimersAsync();
+      });
+
+      // Verify error was logged
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'Error running Stop hooks:',
+        expect.any(Error),
+      );
+
+      // Verify process still exits despite hook error
+      expect(mockProcessExit).toHaveBeenCalledWith(0);
+      
+      consoleErrorSpy.mockRestore();
+    });
   });
 
   describe('Unknown command', () => {
