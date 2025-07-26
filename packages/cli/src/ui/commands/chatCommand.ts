@@ -20,6 +20,7 @@ import path from 'path';
 import { HistoryItemWithoutId, MessageType } from '../types.js';
 
 interface ChatDetail {
+  id: number;
   name: string;
   mtime: Date;
 }
@@ -36,7 +37,7 @@ const getSavedChatTags = async (
     const file_head = 'checkpoint-';
     const file_tail = '.json';
     const files = await fsPromises.readdir(geminiDir);
-    const chatDetails: Array<{ name: string; mtime: Date }> = [];
+    const chatDetails: ChatDetail[] = [];
 
     for (const file of files) {
       if (file.startsWith(file_head) && file.endsWith(file_tail)) {
@@ -44,6 +45,7 @@ const getSavedChatTags = async (
         const stats = await fsPromises.stat(filePath);
         const tagName = file.slice(file_head.length, -file_tail.length);
         chatDetails.push({
+          id: 0, // Will be assigned after sorting
           name: decodeTagName(tagName),
           mtime: stats.mtime,
         });
@@ -55,6 +57,11 @@ const getSavedChatTags = async (
         ? b.mtime.getTime() - a.mtime.getTime()
         : a.mtime.getTime() - b.mtime.getTime(),
     );
+
+    // Assign IDs after sorting (1-based indexing for user-friendliness)
+    chatDetails.forEach((chat, index) => {
+      chat.id = index + 1;
+    });
 
     return chatDetails;
   } catch (_err) {
@@ -79,16 +86,18 @@ const listCommand: SlashCommand = {
     const maxNameLength = Math.max(
       ...chatDetails.map((chat) => chat.name.length),
     );
+    const maxIdLength = chatDetails.length.toString().length;
 
     let message = 'List of saved conversations:\n\n';
     for (const chat of chatDetails) {
+      const paddedId = chat.id.toString().padStart(maxIdLength, ' ');
       const paddedName = chat.name.padEnd(maxNameLength, ' ');
       const isoString = chat.mtime.toISOString();
       const match = isoString.match(/(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})/);
       const formattedDate = match ? `${match[1]} ${match[2]}` : 'Invalid Date';
-      message += `  - \u001b[36m${paddedName}\u001b[0m  \u001b[90m(saved on ${formattedDate})\u001b[0m\n`;
+      message += `  ${paddedId}. \u001b[36m${paddedName}\u001b[0m  \u001b[90m(saved on ${formattedDate})\u001b[0m\n`;
     }
-    message += `\n\u001b[90mNote: Newest last, oldest first\u001b[0m`;
+    message += `\n\u001b[90mNote: Newest last, oldest first. Use /chat resume <id> or /chat resume <tag>\u001b[0m`;
     return {
       type: 'message',
       messageType: 'info',
@@ -165,20 +174,41 @@ const resumeCommand: SlashCommand = {
   name: 'resume',
   altNames: ['load'],
   description:
-    'Resume a conversation from a checkpoint. Usage: /chat resume <tag>',
+    'Resume a conversation from a checkpoint. Usage: /chat resume <id|tag>',
   kind: CommandKind.BUILT_IN,
   action: async (context, args) => {
-    const tag = args.trim();
-    if (!tag) {
+    const input = args.trim();
+    if (!input) {
       return {
         type: 'message',
         messageType: 'error',
-        content: 'Missing tag. Usage: /chat resume <tag>',
+        content: 'Missing ID or tag. Usage: /chat resume <id|tag>',
       };
     }
 
     const { logger } = context.services;
     await logger.initialize();
+    
+    let tag = input;
+    
+    // Check if input is a numeric ID
+    const numericId = parseInt(input, 10);
+    if (!isNaN(numericId) && numericId > 0) {
+      // Get list of chats sorted by date (oldest first)
+      const chatDetails = await getSavedChatTags(context, false);
+      const chat = chatDetails.find(c => c.id === numericId);
+      
+      if (!chat) {
+        return {
+          type: 'message',
+          messageType: 'error',
+          content: `No saved checkpoint found with ID: ${numericId}. Use /chat list to see available checkpoints.`,
+        };
+      }
+      
+      tag = chat.name;
+    }
+    
     const conversation = await logger.loadCheckpoint(tag);
 
     if (conversation.length === 0) {
@@ -226,9 +256,23 @@ const resumeCommand: SlashCommand = {
   },
   completion: async (context, partialArg) => {
     const chatDetails = await getSavedChatTags(context, true);
-    return chatDetails
-      .map((chat) => chat.name)
-      .filter((name) => name.startsWith(partialArg));
+    const completions: string[] = [];
+    
+    // Add tag completions
+    completions.push(
+      ...chatDetails
+        .map((chat) => chat.name)
+        .filter((name) => name.startsWith(partialArg))
+    );
+    
+    // Add ID completions
+    completions.push(
+      ...chatDetails
+        .map((chat) => chat.id.toString())
+        .filter((id) => id.startsWith(partialArg))
+    );
+    
+    return completions;
   },
 };
 

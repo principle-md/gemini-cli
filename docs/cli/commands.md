@@ -23,10 +23,11 @@ Slash commands provide meta-level control over the CLI itself.
         - When you run `/chat list`, the CLI only scans these specific directories to find available checkpoints.
         - **Note:** These checkpoints are for manually saving and resuming conversation states. For automatic checkpoints created before file modifications, see the [Checkpointing documentation](../checkpointing.md).
     - **`resume`**
-      - **Description:** Resumes a conversation from a previous save.
-      - **Usage:** `/chat resume <tag>`
+      - **Description:** Resumes a conversation from a previous save by ID or tag.
+      - **Usage:** `/chat resume <id|tag>`
+      - **Example:** `/chat resume 1` or `/chat resume my-project`
     - **`list`**
-      - **Description:** Lists available tags for chat state resumption.
+      - **Description:** Lists available conversation checkpoints with numeric IDs and tags.
     - **`delete`**
       - **Description:** Deletes a saved conversation checkpoint.
       - **Usage:** `/chat delete <tag>`

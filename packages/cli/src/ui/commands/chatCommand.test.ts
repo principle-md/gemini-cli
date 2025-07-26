@@ -141,10 +141,10 @@ describe('chatCommand', () => {
         .match(/(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})/);
       const formattedDate = isoDate ? `${isoDate[1]} ${isoDate[2]}` : '';
       expect(content).toContain(formattedDate);
-      const index1 = content.indexOf('- \u001b[36mtest1\u001b[0m');
-      const index2 = content.indexOf('- \u001b[36mtest2\u001b[0m');
-      expect(index1).toBeGreaterThanOrEqual(0);
-      expect(index2).toBeGreaterThan(index1);
+      // Check for IDs and names in the output
+      expect(content).toContain('1. \u001b[36mtest1\u001b[0m');
+      expect(content).toContain('2. \u001b[36mtest2\u001b[0m');
+      expect(content).toContain('Use /chat resume <id> or /chat resume <tag>');
     });
 
     it('should handle invalid date formats gracefully', async () => {
@@ -269,13 +269,13 @@ describe('chatCommand', () => {
       resumeCommand = getSubCommand('resume');
     });
 
-    it('should return an error if tag is missing', async () => {
+    it('should return an error if ID or tag is missing', async () => {
       const result = await resumeCommand?.action?.(mockContext, '');
 
       expect(result).toEqual({
         type: 'message',
         messageType: 'error',
-        content: 'Missing tag. Usage: /chat resume <tag>',
+        content: 'Missing ID or tag. Usage: /chat resume <id|tag>',
       });
     });
 
@@ -291,7 +291,7 @@ describe('chatCommand', () => {
       });
     });
 
-    it('should resume a conversation', async () => {
+    it('should resume a conversation by tag', async () => {
       const conversation: Content[] = [
         { role: 'user', parts: [{ text: 'hello gemini' }] },
         { role: 'model', parts: [{ text: 'hello world' }] },
@@ -310,8 +310,62 @@ describe('chatCommand', () => {
       });
     });
 
+    it('should resume a conversation by ID', async () => {
+      const fakeFiles = ['checkpoint-alpha.json', 'checkpoint-beta.json'];
+      const date = new Date();
+      
+      mockFs.readdir.mockImplementation(
+        (async (_: string): Promise<string[]> =>
+          fakeFiles as string[]) as unknown as typeof fsPromises.readdir,
+      );
+      
+      mockFs.stat.mockImplementation((async (path: string): Promise<Stats> => {
+        if (path.endsWith('alpha.json')) {
+          return { mtime: date } as Stats;
+        }
+        return { mtime: new Date(date.getTime() + 1000) } as Stats;
+      }) as unknown as typeof fsPromises.stat);
+
+      const conversation: Content[] = [
+        { role: 'user', parts: [{ text: 'hello from beta' }] },
+        { role: 'model', parts: [{ text: 'hello beta world' }] },
+      ];
+      mockLoadCheckpoint.mockResolvedValue(conversation);
+
+      const result = await resumeCommand?.action?.(mockContext, '2');
+
+      expect(mockLoadCheckpoint).toHaveBeenCalledWith('beta');
+      expect(result).toEqual({
+        type: 'load_history',
+        history: [
+          { type: 'user', text: 'hello from beta' },
+          { type: 'gemini', text: 'hello beta world' },
+        ] as HistoryItemWithoutId[],
+        clientHistory: conversation,
+      });
+    });
+
+    it('should return error for invalid numeric ID', async () => {
+      const fakeFiles = ['checkpoint-alpha.json', 'checkpoint-beta.json'];
+      
+      mockFs.readdir.mockImplementation(
+        (async (_: string): Promise<string[]> =>
+          fakeFiles as string[]) as unknown as typeof fsPromises.readdir,
+      );
+      
+      mockFs.stat.mockResolvedValue({ mtime: new Date() } as Stats);
+
+      const result = await resumeCommand?.action?.(mockContext, '99');
+
+      expect(result).toEqual({
+        type: 'message',
+        messageType: 'error',
+        content: 'No saved checkpoint found with ID: 99. Use /chat list to see available checkpoints.',
+      });
+    });
+
     describe('completion', () => {
-      it('should provide completion suggestions', async () => {
+      it('should provide tag completion suggestions', async () => {
         const fakeFiles = ['checkpoint-alpha.json', 'checkpoint-beta.json'];
         mockFs.readdir.mockImplementation(
           (async (_: string): Promise<string[]> =>
@@ -328,6 +382,25 @@ describe('chatCommand', () => {
         const result = await resumeCommand?.completion?.(mockContext, 'a');
 
         expect(result).toEqual(['alpha']);
+      });
+
+      it('should provide ID completion suggestions', async () => {
+        const fakeFiles = ['checkpoint-alpha.json', 'checkpoint-beta.json'];
+        mockFs.readdir.mockImplementation(
+          (async (_: string): Promise<string[]> =>
+            fakeFiles as string[]) as unknown as typeof fsPromises.readdir,
+        );
+
+        mockFs.stat.mockImplementation(
+          (async (_: string): Promise<Stats> =>
+            ({
+              mtime: new Date(),
+            }) as Stats) as unknown as typeof fsPromises.stat,
+        );
+
+        const result = await resumeCommand?.completion?.(mockContext, '2');
+
+        expect(result).toContain('2');
       });
 
       it('should suggest filenames sorted by modified time (newest first)', async () => {
@@ -348,7 +421,8 @@ describe('chatCommand', () => {
 
         const result = await resumeCommand?.completion?.(mockContext, '');
         // Sort items by last modified time (newest first)
-        expect(result).toEqual(['test2', 'test1']);
+        // Now includes both tags and IDs
+        expect(result).toEqual(['test2', 'test1', '1', '2']);
       });
     });
   });
