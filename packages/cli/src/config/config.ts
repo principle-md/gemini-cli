@@ -67,6 +67,7 @@ export interface CliArgs {
   proxy: string | undefined;
   includeDirectories: string[] | undefined;
   loadMemoryFromIncludeDirectories: boolean | undefined;
+  resume: string | undefined;
 }
 
 export async function parseArguments(): Promise<CliArgs> {
@@ -228,6 +229,11 @@ export async function parseArguments(): Promise<CliArgs> {
             );
           }
           return true;
+        })
+        .option('resume', {
+          alias: 'r',
+          type: 'string',
+          description: 'Resume a conversation by ID or tag',
         }),
     )
     // Register MCP subcommands

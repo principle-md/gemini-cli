@@ -101,6 +101,7 @@ interface AppProps {
   settings: LoadedSettings;
   startupWarnings?: string[];
   version: string;
+  resumeId?: string;
 }
 
 export const AppWrapper = (props: AppProps) => (
@@ -111,7 +112,7 @@ export const AppWrapper = (props: AppProps) => (
   </SessionStatsProvider>
 );
 
-const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
+const App = ({ config, settings, startupWarnings = [], version, resumeId }: AppProps) => {
   const isFocused = useFocus();
   useBracketedPaste();
   const [updateInfo, setUpdateInfo] = useState<UpdateObject | null>(null);
@@ -762,11 +763,26 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
 
   const initialPrompt = useMemo(() => config.getQuestion(), [config]);
   const geminiClient = config.getGeminiClient();
+  const resumeHandled = useRef(false);
 
   useEffect(() => {
     if (
+      resumeId &&
+      !resumeHandled.current &&
+      !isAuthenticating &&
+      !isAuthDialogOpen &&
+      !isThemeDialogOpen &&
+      !isEditorDialogOpen &&
+      !showPrivacyNotice &&
+      geminiClient?.isInitialized?.()
+    ) {
+      // Handle resume command
+      handleSlashCommand(`/chat resume ${resumeId}`);
+      resumeHandled.current = true;
+    } else if (
       initialPrompt &&
       !initialPromptSubmitted.current &&
+      !resumeId &&
       !isAuthenticating &&
       !isAuthDialogOpen &&
       !isThemeDialogOpen &&
@@ -786,6 +802,8 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     isEditorDialogOpen,
     showPrivacyNotice,
     geminiClient,
+    resumeId,
+    handleSlashCommand,
   ]);
 
   if (quittingMessages) {
