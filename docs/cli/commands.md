@@ -18,10 +18,11 @@ Slash commands provide meta-level control over the CLI itself.
       - **Description:** Saves the current conversation history. You must add a `<tag>` for identifying the conversation state.
       - **Usage:** `/chat save <tag>`
     - **`resume`**
-      - **Description:** Resumes a conversation from a previous save.
-      - **Usage:** `/chat resume <tag>`
+      - **Description:** Resumes a conversation from a previous save by ID or tag.
+      - **Usage:** `/chat resume <id|tag>`
+      - **Example:** `/chat resume 1` or `/chat resume my-project`
     - **`list`**
-      - **Description:** Lists available tags for chat state resumption.
+      - **Description:** Lists available conversation checkpoints with numeric IDs and tags.
 
 - **`/clear`**
   - **Description:** Clear the terminal screen, including the visible session history and scrollback within the CLI. The underlying session data (for history recall) might be preserved depending on the exact implementation, but the visual display is cleared.
