@@ -5,7 +5,7 @@
  */
 
 import { spawn } from 'child_process';
-import { HookConfig } from '../config/config.js';
+import { HookConfig } from './types.js';
 import {
   HookInput,
   HookOutput,
