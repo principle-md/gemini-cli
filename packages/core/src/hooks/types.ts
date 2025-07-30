@@ -96,3 +96,23 @@ export enum HookExecutionOutcome {
   NonBlockingError = 'nonBlockingError',
   Timeout = 'timeout',
 }
+
+export interface HookConfig {
+  type: 'command';
+  command: string;
+  timeout?: number;
+}
+
+export interface HookMatcher {
+  matcher?: string;
+  hooks: HookConfig[];
+}
+
+export interface HooksConfiguration {
+  PreToolUse?: HookMatcher[];
+  PostToolUse?: HookMatcher[];
+  Notification?: HookMatcher[];
+  Stop?: HookMatcher[];
+  SubagentStop?: HookMatcher[];
+  PreCompact?: HookMatcher[];
+}
