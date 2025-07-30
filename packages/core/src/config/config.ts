@@ -47,7 +47,7 @@ import { ClearcutLogger } from '../telemetry/clearcut-logger/clearcut-logger.js'
 import { shouldAttemptBrowserLaunch } from '../utils/browser.js';
 import { MCPOAuthConfig } from '../mcp/oauth-provider.js';
 import { IdeClient } from '../ide/ide-client.js';
-import { HooksConfiguration } from '../hooks/hooks-manager.js';
+import { HooksConfiguration } from '../hooks/types.js';
 
 // Re-export OAuth config type
 export type { MCPOAuthConfig };
@@ -141,25 +141,7 @@ export type FlashFallbackHandler = (
   error?: unknown,
 ) => Promise<boolean | string | null>;
 
-export interface HookConfig {
-  type: 'command';
-  command: string;
-  timeout?: number;
-}
 
-export interface HookMatcher {
-  matcher?: string;
-  hooks: HookConfig[];
-}
-
-export interface HooksConfiguration {
-  PreToolUse?: HookMatcher[];
-  PostToolUse?: HookMatcher[];
-  Notification?: HookMatcher[];
-  Stop?: HookMatcher[];
-  SubagentStop?: HookMatcher[];
-  PreCompact?: HookMatcher[];
-}
 
 export interface ConfigParameters {
   sessionId: string;

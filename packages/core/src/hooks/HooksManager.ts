@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Config, HooksConfiguration, HookMatcher } from '../config/config.js';
+import { Config } from '../config/config.js';
+import { HooksConfiguration, HookMatcher, HookConfig } from './types.js';
 import { HookExecutor } from './HookExecutor.js';
 import {
   HookEventName,
@@ -152,8 +153,8 @@ export class HooksManager {
   private findMatchingHooks(
     hookMatchers: HookMatcher[],
     toolName: string | undefined,
-  ): import('../config/config.js').HookConfig[] {
-    const matchingHooks: import('../config/config.js').HookConfig[] = [];
+  ): HookConfig[] {
+    const matchingHooks: HookConfig[] = [];
 
     for (const matcher of hookMatchers) {
       if (!matcher.matcher || !toolName) {
