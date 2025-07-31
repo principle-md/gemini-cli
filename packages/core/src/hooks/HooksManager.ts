@@ -186,6 +186,50 @@ export class HooksManager {
     return path.join(this.config.getProjectTempDir(), 'transcript.json');
   }
 
+  /**
+   * Generic method to run any hook event
+   */
+  async runHook<T extends HookInput>(
+    eventName: HookEventName,
+    input: any,
+    context: HookExecutionContext,
+    signal?: AbortSignal,
+  ): Promise<HookExecutionResult[]> {
+    const hookMatchers = this.hooks[eventName];
+    
+    if (!hookMatchers || hookMatchers.length === 0) {
+      return [];
+    }
+
+    const fullInput: T = {
+      ...this.createBaseHookInput(context),
+      hook_event_name: eventName,
+      agent_type: input.agent_type || 'gemini',
+      ...input,
+    } as T;
+
+    // Determine if this event type has a tool_name for matching
+    const toolName = 'tool_name' in fullInput ? (fullInput as any).tool_name : undefined;
+    const matchingHooks = this.findMatchingHooks(hookMatchers, toolName);
+
+    if (matchingHooks.length === 0) {
+      return [];
+    }
+
+    // Execute all matching hooks in parallel
+    const results = await Promise.allSettled(
+      matchingHooks.map(hook => 
+        this.hookExecutor.execute(hook, fullInput, signal)
+      )
+    );
+
+    return results
+      .filter((result): result is PromiseFulfilledResult<HookExecutionResult> => 
+        result.status === 'fulfilled'
+      )
+      .map((result) => result.value);
+  }
+
   private createBaseHookInput(context: HookExecutionContext): Pick<import('./types.js').BaseHookInput, 'session_id' | 'transcript_path' | 'agent_type' | 'metadata'> {
     return {
       session_id: context.sessionId,

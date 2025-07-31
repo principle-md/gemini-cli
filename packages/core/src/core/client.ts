@@ -42,6 +42,7 @@ import {
 import { ProxyAgent, setGlobalDispatcher } from 'undici';
 import { DEFAULT_GEMINI_FLASH_MODEL } from '../config/models.js';
 import { LoopDetectionService } from '../services/loopDetectionService.js';
+import { HooksManager, HookExecutionContext, HookTrigger } from '../hooks/index.js';
 import { ideContext } from '../ide/ideContext.js';
 import { logNextSpeakerCheck } from '../telemetry/loggers.js';
 import {
@@ -114,6 +115,8 @@ export class GeminiClient {
   private lastPromptId: string;
   private lastSentIdeContext: IdeContext | undefined;
   private forceFullIdeContext = true;
+  private hooksManager?: HooksManager;
+  private hookTrigger?: HookTrigger;
 
   constructor(private config: Config) {
     if (config.getProxy()) {
@@ -126,6 +129,12 @@ export class GeminiClient {
   }
 
   async initialize(contentGeneratorConfig: ContentGeneratorConfig) {
+    // Trigger session start hook
+    await this?.hookTrigger?.sessionStart(
+      this.config.getIdeMode() ? 'ide' : 'cli',
+      this.config.getWorkingDir()
+    );
+    
     this.contentGenerator = await createContentGenerator(
       contentGeneratorConfig,
       this.config,
@@ -441,6 +450,11 @@ export class GeminiClient {
     turns: number = this.MAX_TURNS,
     originalModel?: string,
   ): AsyncGenerator<ServerGeminiStreamEvent, Turn> {
+    // Trigger pre-user message hook
+    const messageText = Array.isArray(request) 
+      ? request.map((part: any) => typeof part === 'object' && 'text' in part ? part.text : '').join(' ')
+      : typeof request === 'string' ? request : '';
+    await this.hookTrigger?.preUserMessage(messageText);
     if (this.lastPromptId !== prompt_id) {
       this.loopDetector.reset(prompt_id);
       this.lastPromptId = prompt_id;
@@ -451,12 +465,12 @@ export class GeminiClient {
       this.sessionTurnCount > this.config.getMaxSessionTurns()
     ) {
       yield { type: GeminiEventType.MaxSessionTurns };
-      return new Turn(this.getChat(), prompt_id);
+      return new Turn(this.getChat(), prompt_id, this.hookTrigger);
     }
     // Ensure turns never exceeds MAX_TURNS to prevent infinite loops
     const boundedTurns = Math.min(turns, this.MAX_TURNS);
     if (!boundedTurns) {
-      return new Turn(this.getChat(), prompt_id);
+      return new Turn(this.getChat(), prompt_id, this.hookTrigger);
     }
 
     // Track the original model from the first call to detect model switching
@@ -495,7 +509,7 @@ export class GeminiClient {
       this.forceFullIdeContext = false;
     }
 
-    const turn = new Turn(this.getChat(), prompt_id);
+    const turn = new Turn(this.getChat(), prompt_id, this.hookTrigger);
 
     const loopDetected = await this.loopDetector.turnStarted(signal);
     if (loopDetected) {
@@ -503,6 +517,11 @@ export class GeminiClient {
       return turn;
     }
 
+    // Trigger pre-model response hook
+    const currentModel = this.config.getModel();
+    const contextLength = this.getHistory().length;
+    await this.hookTrigger?.preModelResponse(currentModel, contextLength);
+    
     const resultStream = turn.run(request, signal);
     for await (const event of resultStream) {
       if (this.loopDetector.addAndCheck(event)) {
@@ -511,6 +530,12 @@ export class GeminiClient {
       }
       yield event;
     }
+    
+    // Trigger post-model response hook
+    const response = turn.getResponseText();
+    const toolCalls = turn.pendingToolCalls.map(tc => tc.name);
+    await this.hookTrigger?.postModelResponse(currentModel, response, toolCalls);
+    
     if (!turn.pendingToolCalls.length && signal && !signal.aborted) {
       // Check if model was switched during the call (likely due to quota error)
       const currentModel = this.config.getModel();
@@ -889,5 +914,13 @@ export class GeminiClient {
     }
 
     return null;
+  }
+
+  getHooksManager(): HooksManager | undefined {
+    return this.hooksManager;
+  }
+  
+  getHookTrigger(): HookTrigger | undefined {
+    return this.hookTrigger;
   }
 }

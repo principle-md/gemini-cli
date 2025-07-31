@@ -25,6 +25,7 @@ import {
   toFriendlyError,
 } from '../utils/errors.js';
 import { GeminiChat } from './geminiChat.js';
+import { HookTrigger } from '../hooks/index.js';
 
 // Define a structure for tools passed to the server
 export interface ServerTool {
@@ -166,14 +167,17 @@ export class Turn {
   readonly pendingToolCalls: ToolCallRequestInfo[];
   private debugResponses: GenerateContentResponse[];
   finishReason: FinishReason | undefined;
+  private readonly hookTrigger?: HookTrigger;
 
   constructor(
     private readonly chat: GeminiChat,
     private readonly prompt_id: string,
+    hookTrigger?: HookTrigger,
   ) {
     this.pendingToolCalls = [];
     this.debugResponses = [];
     this.finishReason = undefined;
+    this.hookTrigger = hookTrigger;
   }
   // The run method yields simpler events suitable for server logic
   async *run(
@@ -181,6 +185,12 @@ export class Turn {
     signal: AbortSignal,
   ): AsyncGenerator<ServerGeminiStreamEvent> {
     try {
+      // Trigger message sent hook
+      const messageText = Array.isArray(req)
+        ? req.map((part: any) => typeof part === 'object' && 'text' in part ? part.text : '').join(' ')
+        : typeof req === 'string' ? req : '';
+      await this?.hookTrigger?.messageSent('model', messageText);
+      
       const responseStream = await this.chat.sendMessageStream(
         {
           message: req,
@@ -214,6 +224,9 @@ export class Turn {
             description,
           };
 
+          // Trigger thought generated hook
+          await this?.hookTrigger?.thoughtGenerated(`${thought.subject}: ${thought.description}`);
+          
           yield {
             type: GeminiEventType.Thought,
             value: thought,
@@ -224,6 +237,8 @@ export class Turn {
         const text = getResponseText(resp);
         if (text) {
           yield { type: GeminiEventType.Content, value: text };
+          // Trigger message received hook
+          await this?.hookTrigger?.messageReceived('assistant', text);
         }
 
         // Handle function calls (requesting tool execution)
@@ -248,8 +263,25 @@ export class Turn {
       }
     } catch (e) {
       const error = toFriendlyError(e);
+      
+      // Trigger error hooks
+      const errorMessage = getErrorMessage(error);
       if (error instanceof UnauthorizedError) {
+        await this?.hookTrigger?.unauthorizedAccess('API', 401);
         throw error;
+      }
+      
+      // Determine error type and trigger appropriate hook
+      if (error instanceof Error && error.message.includes('network')) {
+        await this?.hookTrigger?.networkError(errorMessage);
+      } else if (error instanceof Error && error.message.includes('timeout')) {
+        await this?.hookTrigger?.timeoutError('API call', 30000);
+      } else {
+        await this?.hookTrigger?.error(
+          error instanceof Error ? error.constructor.name : 'UnknownError',
+          errorMessage,
+          error instanceof Error ? error.stack : undefined
+        );
       }
       if (signal.aborted) {
         yield { type: GeminiEventType.UserCancelled };
@@ -306,5 +338,12 @@ export class Turn {
 
   getDebugResponses(): GenerateContentResponse[] {
     return this.debugResponses;
+  }
+  
+  getResponseText(): string {
+    return this.debugResponses
+      .map(resp => getResponseText(resp))
+      .filter(text => text)
+      .join('');
   }
 }
