@@ -7,3 +7,4 @@
 export * from './types.js';
 export * from './HookExecutor.js';
 export * from './HooksManager.js';
+export * from './HookTrigger.js';
