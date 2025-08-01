@@ -47,6 +47,7 @@ import { ClearcutLogger } from '../telemetry/clearcut-logger/clearcut-logger.js'
 import { shouldAttemptBrowserLaunch } from '../utils/browser.js';
 import { MCPOAuthConfig } from '../mcp/oauth-provider.js';
 import { IdeClient } from '../ide/ide-client.js';
+import { HooksConfiguration } from '../hooks/types.js';
 
 // Re-export OAuth config type
 export type { MCPOAuthConfig };
@@ -140,6 +141,8 @@ export type FlashFallbackHandler = (
   error?: unknown,
 ) => Promise<boolean | string | null>;
 
+
+
 export interface ConfigParameters {
   sessionId: string;
   embeddingModel?: string;
@@ -183,6 +186,7 @@ export interface ConfigParameters {
   summarizeToolOutput?: Record<string, SummarizeToolOutputSettings>;
   ideMode?: boolean;
   ideClient?: IdeClient;
+  hooks?: HooksConfiguration;
 }
 
 export class Config {
@@ -234,6 +238,7 @@ export class Config {
     name: string;
     extensionName: string;
   }>;
+  private readonly hooks: HooksConfiguration | undefined;
   flashFallbackHandler?: FlashFallbackHandler;
   private quotaErrorOccurred: boolean = false;
   private readonly summarizeToolOutput:
@@ -292,6 +297,7 @@ export class Config {
     this.summarizeToolOutput = params.summarizeToolOutput;
     this.ideMode = params.ideMode ?? false;
     this.ideClient = params.ideClient;
+    this.hooks = params.hooks;
 
     if (params.contextFileName) {
       setGeminiMdFilename(params.contextFileName);
@@ -587,6 +593,10 @@ export class Config {
 
   getIdeClient(): IdeClient | undefined {
     return this.ideClient;
+  }
+
+  getHooks(): HooksConfiguration | undefined {
+    return this.hooks;
   }
 
   async getGitService(): Promise<GitService> {

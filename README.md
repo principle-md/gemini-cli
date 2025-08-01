@@ -64,6 +64,37 @@ You have two options to install Gemini CLI.
 
 You are now ready to use the Gemini CLI!
 
+## Running from Local Development
+
+If you've cloned this repository and want to run your local version (e.g., to test modifications or add features like hooks):
+
+1. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+2. **Build the project:**
+   ```bash
+   npm run build
+   ```
+
+3. **Run the CLI locally:**
+   ```bash
+   npm start
+   ```
+
+4. **Make it globally available** (optional):
+   
+   Using npm link:
+   ```bash
+   npm link
+   ```
+   
+   Or create an alias in your shell config:
+   ```bash
+   alias gemini="node /path/to/gemini-cli/bundle/gemini.js"
+   ```
+
 ### Use a Gemini API key:
 
 The Gemini API provides a free tier with [100 requests per day](https://ai.google.dev/gemini-api/docs/rate-limits#free-tier) using Gemini 2.5 Pro, control over which model you use, and access to higher rate limits (with a paid plan):
@@ -92,6 +123,61 @@ The Vertex AI API provides a [free tier](https://cloud.google.com/vertex-ai/gene
 3. (Optionally) Add a billing account on your project to get access to [higher usage limits](https://cloud.google.com/vertex-ai/generative-ai/docs/quotas)
 
 For other authentication methods, including Google Workspace accounts, see the [authentication](./docs/cli/authentication.md) guide.
+
+## Hooks System
+
+Gemini CLI includes a hooks system that allows you to run custom scripts in response to various events during CLI operation. This enables workflow automation, logging, monitoring, and integration with external tools.
+
+### Configuration
+
+Hooks are configured in your settings file (`~/.gemini/settings.json`):
+
+```json
+{
+  "hooks": [
+    {
+      "name": "file-tracker",
+      "command": "/path/to/your/hook-script.js",
+      "events": ["PreToolUse", "PostToolUse"],
+      "tools": ["read_file", "write_file", "replace"]
+    }
+  ]
+}
+```
+
+### Hook Events
+
+- **PreToolUse**: Called before a tool is executed
+- **PostToolUse**: Called after a tool completes
+- **Stop**: Called when the CLI session ends
+- **Notification**: Called for system notifications  
+- **SubagentStop**: Called when a subagent stops
+- **PreCompact**: Called before conversation compaction
+
+### Hook Script Format
+
+Hook scripts receive JSON input via stdin and should exit with status code 0 for success or 2 to block execution:
+
+```javascript
+#!/usr/bin/env node
+const fs = require('fs');
+
+// Read hook data from stdin
+let inputData = '';
+process.stdin.on('data', chunk => inputData += chunk);
+process.stdin.on('end', () => {
+  const data = JSON.parse(inputData);
+  
+  // Process the hook data
+  console.log(`Tool used: ${data.tool_name}`);
+  console.log(`Agent: ${data.agent_type}`); // 'gemini'
+  
+  // Exit with 0 for success, 2 to block
+  process.exit(0);
+});
+```
+
+The hooks system is compatible with Claude Code hooks, allowing you to use the same hook scripts across both tools.
 
 ## Examples
 

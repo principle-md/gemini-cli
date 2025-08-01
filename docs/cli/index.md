@@ -26,3 +26,20 @@ Gemini CLI executes the command and prints the output to your terminal. Note tha
 ```bash
 gemini -p "What is fine tuning?"
 ```
+
+## Resuming conversations
+
+You can resume a previously saved conversation using the `--resume` or `-r` flag. This accepts either a numeric ID or a tag name:
+
+```bash
+# Resume by ID (from /chat list)
+gemini --resume 1
+
+# Resume by tag name
+gemini --resume my-project
+
+# Short form
+gemini -r 2
+```
+
+This will load the conversation history and continue in interactive mode. Use `/chat list` within a session to see available conversations with their IDs and tags.

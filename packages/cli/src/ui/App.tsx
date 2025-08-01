@@ -36,6 +36,7 @@ import { ThemeDialog } from './components/ThemeDialog.js';
 import { AuthDialog } from './components/AuthDialog.js';
 import { AuthInProgress } from './components/AuthInProgress.js';
 import { EditorSettingsDialog } from './components/EditorSettingsDialog.js';
+import { ShellConfirmationDialog } from './components/ShellConfirmationDialog.js';
 import { Colors } from './colors.js';
 import { Help } from './components/Help.js';
 import { loadHierarchicalGeminiMemory } from '../config/config.js';
@@ -87,6 +88,7 @@ import ansiEscapes from 'ansi-escapes';
 import { OverflowProvider } from './contexts/OverflowContext.js';
 import { ShowMoreLines } from './components/ShowMoreLines.js';
 import { PrivacyNotice } from './privacy/PrivacyNotice.js';
+import { appEvents, AppEvent } from '../utils/events.js';
 
 const CTRL_EXIT_PROMPT_DURATION_MS = 1000;
 
@@ -95,6 +97,7 @@ interface AppProps {
   settings: LoadedSettings;
   startupWarnings?: string[];
   version: string;
+  resumeId?: string;
 }
 
 export const AppWrapper = (props: AppProps) => (
@@ -105,7 +108,7 @@ export const AppWrapper = (props: AppProps) => (
   </SessionStatsProvider>
 );
 
-const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
+const App = ({ config, settings, startupWarnings = [], version, resumeId }: AppProps) => {
   const isFocused = useFocus();
   useBracketedPaste();
   const [updateMessage, setUpdateMessage] = useState<string | null>(null);
@@ -168,6 +171,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     useState<boolean>(false);
   const [userTier, setUserTier] = useState<UserTierId | undefined>(undefined);
   const [openFiles, setOpenFiles] = useState<OpenFiles | undefined>();
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
   useEffect(() => {
     const unsubscribe = ideContext.subscribeToOpenFiles(setOpenFiles);
@@ -176,13 +180,38 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     return unsubscribe;
   }, []);
 
+  useEffect(() => {
+    const openDebugConsole = () => {
+      setShowErrorDetails(true);
+      setConstrainHeight(false); // Make sure the user sees the full message.
+    };
+    appEvents.on(AppEvent.OpenDebugConsole, openDebugConsole);
+
+    const logErrorHandler = (errorMessage: unknown) => {
+      handleNewMessage({
+        type: 'error',
+        content: String(errorMessage),
+        count: 1,
+      });
+    };
+    appEvents.on(AppEvent.LogError, logErrorHandler);
+
+    return () => {
+      appEvents.off(AppEvent.OpenDebugConsole, openDebugConsole);
+      appEvents.off(AppEvent.LogError, logErrorHandler);
+    };
+  }, [handleNewMessage]);
+
   const openPrivacyNotice = useCallback(() => {
     setShowPrivacyNotice(true);
   }, []);
   const initialPromptSubmitted = useRef(false);
 
   const errorCount = useMemo(
-    () => consoleMessages.filter((msg) => msg.type === 'error').length,
+    () =>
+      consoleMessages
+        .filter((msg) => msg.type === 'error')
+        .reduce((total, msg) => total + msg.count, 0),
     [consoleMessages],
   );
 
@@ -426,6 +455,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     slashCommands,
     pendingHistoryItems: pendingSlashCommandHistoryItems,
     commandContext,
+    shellConfirmationRequest,
   } = useSlashCommandProcessor(
     config,
     settings,
@@ -442,6 +472,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     setQuittingMessages,
     openPrivacyNotice,
     toggleVimEnabled,
+    setIsProcessing,
   );
 
   const {
@@ -598,7 +629,8 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     fetchUserMessages();
   }, [history, logger]);
 
-  const isInputActive = streamingState === StreamingState.Idle && !initError;
+  const isInputActive =
+    streamingState === StreamingState.Idle && !initError && !isProcessing;
 
   const handleClearScreen = useCallback(() => {
     clearItems();
@@ -667,11 +699,26 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
 
   const initialPrompt = useMemo(() => config.getQuestion(), [config]);
   const geminiClient = config.getGeminiClient();
+  const resumeHandled = useRef(false);
 
   useEffect(() => {
     if (
+      resumeId &&
+      !resumeHandled.current &&
+      !isAuthenticating &&
+      !isAuthDialogOpen &&
+      !isThemeDialogOpen &&
+      !isEditorDialogOpen &&
+      !showPrivacyNotice &&
+      geminiClient?.isInitialized?.()
+    ) {
+      // Handle resume command
+      handleSlashCommand(`/chat resume ${resumeId}`);
+      resumeHandled.current = true;
+    } else if (
       initialPrompt &&
       !initialPromptSubmitted.current &&
+      !resumeId &&
       !isAuthenticating &&
       !isAuthDialogOpen &&
       !isThemeDialogOpen &&
@@ -691,6 +738,8 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     isEditorDialogOpen,
     showPrivacyNotice,
     geminiClient,
+    resumeId,
+    handleSlashCommand,
   ]);
 
   if (quittingMessages) {
@@ -722,7 +771,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
 
   return (
     <StreamingContext.Provider value={streamingState}>
-      <Box flexDirection="column" marginBottom={1} width="90%">
+      <Box flexDirection="column" width="90%">
         {/* Move UpdateNotification outside Static so it can re-render when updateMessage changes */}
         {updateMessage && <UpdateNotification message={updateMessage} />}
 
@@ -804,7 +853,9 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
             </Box>
           )}
 
-          {isThemeDialogOpen ? (
+          {shellConfirmationRequest ? (
+            <ShellConfirmationDialog request={shellConfirmationRequest} />
+          ) : isThemeDialogOpen ? (
             <Box flexDirection="column">
               {themeError && (
                 <Box marginBottom={1}>

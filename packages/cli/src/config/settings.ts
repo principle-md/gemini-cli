@@ -56,6 +56,26 @@ export interface AccessibilitySettings {
   disableLoadingPhrases?: boolean;
 }
 
+export interface HookConfig {
+  type: 'command';
+  command: string;
+  timeout?: number;
+}
+
+export interface HookMatcher {
+  matcher?: string;
+  hooks: HookConfig[];
+}
+
+export interface HooksConfiguration {
+  PreToolUse?: HookMatcher[];
+  PostToolUse?: HookMatcher[];
+  Notification?: HookMatcher[];
+  Stop?: HookMatcher[];
+  SubagentStop?: HookMatcher[];
+  PreCompact?: HookMatcher[];
+}
+
 export interface Settings {
   theme?: string;
   customThemes?: Record<string, CustomTheme>;
@@ -78,6 +98,9 @@ export interface Settings {
   bugCommand?: BugCommandSettings;
   checkpointing?: CheckpointingSettings;
   autoConfigureMaxOldSpaceSize?: boolean;
+  
+  // Hooks configuration
+  hooks?: HooksConfiguration;
 
   // Git-aware file filtering settings
   fileFiltering?: {

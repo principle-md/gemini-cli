@@ -36,19 +36,51 @@ vi.mock('../../services/McpPromptLoader.js', () => ({
 }));
 
 vi.mock('../contexts/SessionContext.js', () => ({
-  useSessionStats: vi.fn(() => ({ stats: {} })),
+  useSessionStats: vi.fn(() => ({ 
+    stats: {
+      sessionStartTime: new Date('2025-01-01T00:00:00.000Z')
+    }
+  })),
 }));
 
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach, type Mock } from 'vitest';
 import { useSlashCommandProcessor } from './slashCommandProcessor.js';
-import { CommandKind, SlashCommand } from '../commands/types.js';
-import { Config } from '@google/gemini-cli-core';
+import {
+  CommandContext,
+  CommandKind,
+  ConfirmShellCommandsActionReturn,
+  SlashCommand,
+} from '../commands/types.js';
+import { Config, ToolConfirmationOutcome } from '@google/gemini-cli-core';
 import { LoadedSettings } from '../../config/settings.js';
 import { MessageType } from '../types.js';
 import { BuiltinCommandLoader } from '../../services/BuiltinCommandLoader.js';
 import { FileCommandLoader } from '../../services/FileCommandLoader.js';
 import { McpPromptLoader } from '../../services/McpPromptLoader.js';
+
+vi.mock('./useShowMemoryCommand.js', () => ({
+  SHOW_MEMORY_COMMAND_NAME: '/memory show',
+  createShowMemoryAction: vi.fn(() => vi.fn()),
+}));
+
+vi.mock('open', () => ({
+  default: vi.fn(),
+}));
+
+vi.mock('@google/gemini-cli-core', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@google/gemini-cli-core')>();
+  return {
+    ...actual,
+    getMCPServerStatus: vi.fn(),
+    getMCPDiscoveryState: vi.fn(),
+    HooksManager: vi.fn().mockImplementation(() => ({
+      runStop: vi.fn().mockResolvedValue(undefined),
+      getTranscriptPath: vi.fn().mockReturnValue('/tmp/transcript.json'),
+    })),
+  };
+});
 
 const createTestCommand = (
   overrides: Partial<SlashCommand>,
@@ -78,8 +110,18 @@ describe('useSlashCommandProcessor', () => {
 
   const mockSettings = {} as LoadedSettings;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+    vi.useRealTimers(); // Ensure real timers for each test
+    mockProcessExit.mockClear();
+    
+    // Reset HooksManager mock to default
+    const { HooksManager } = await import('@google/gemini-cli-core');
+    vi.mocked(HooksManager).mockImplementation(() => ({
+      runStop: vi.fn().mockResolvedValue(undefined),
+      getTranscriptPath: vi.fn().mockReturnValue('/tmp/transcript.json'),
+    }) as any);
+    
     (vi.mocked(BuiltinCommandLoader) as Mock).mockClear();
     mockBuiltinLoadCommands.mockResolvedValue([]);
     mockFileLoadCommands.mockResolvedValue([]);
@@ -90,6 +132,7 @@ describe('useSlashCommandProcessor', () => {
     builtinCommands: SlashCommand[] = [],
     fileCommands: SlashCommand[] = [],
     mcpCommands: SlashCommand[] = [],
+    setIsProcessing = vi.fn(),
   ) => {
     mockBuiltinLoadCommands.mockResolvedValue(Object.freeze(builtinCommands));
     mockFileLoadCommands.mockResolvedValue(Object.freeze(fileCommands));
@@ -112,6 +155,7 @@ describe('useSlashCommandProcessor', () => {
         mockSetQuittingMessages,
         vi.fn(), // openPrivacyNotice
         vi.fn(), // toggleVimEnabled
+        setIsProcessing,
       ),
     );
 
@@ -275,6 +319,32 @@ describe('useSlashCommandProcessor', () => {
         'with args',
       );
     });
+
+    it('should set isProcessing to true during execution and false afterwards', async () => {
+      const mockSetIsProcessing = vi.fn();
+      const command = createTestCommand({
+        name: 'long-running',
+        action: () => new Promise((resolve) => setTimeout(resolve, 50)),
+      });
+
+      const result = setupProcessorHook([command], [], [], mockSetIsProcessing);
+      await waitFor(() => expect(result.current.slashCommands).toHaveLength(1));
+
+      const executionPromise = act(async () => {
+        await result.current.handleSlashCommand('/long-running');
+      });
+
+      // It should be true immediately after starting
+      expect(mockSetIsProcessing).toHaveBeenCalledWith(true);
+      // It should not have been called with false yet
+      expect(mockSetIsProcessing).not.toHaveBeenCalledWith(false);
+
+      await executionPromise;
+
+      // After the promise resolves, it should be called with false
+      expect(mockSetIsProcessing).toHaveBeenCalledWith(false);
+      expect(mockSetIsProcessing).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe('Action Result Handling', () => {
@@ -327,27 +397,155 @@ describe('useSlashCommandProcessor', () => {
           name: 'exit',
           action: quitAction,
         });
+        
         const result = setupProcessorHook([command]);
 
         await waitFor(() =>
           expect(result.current.slashCommands).toHaveLength(1),
         );
 
-        vi.useFakeTimers();
+        await act(async () => {
+          await result.current.handleSlashCommand('/exit');
+        });
 
+        expect(mockSetQuittingMessages).toHaveBeenCalledWith([]);
+        
+        // Process.exit is called in a setTimeout, need to wait for it
+        await waitFor(() => {
+          expect(mockProcessExit).toHaveBeenCalledWith(0);
+        }, { timeout: 1000 });
+      });
+      
+      it('should call runStop hooks before exiting', async () => {
+        // Create mocks for the hooks
+        const mockRunStop = vi.fn().mockResolvedValue(undefined);
+        const mockGetTranscriptPath = vi.fn().mockReturnValue('/tmp/transcript.json');
+        
+        // Mock formatDuration
+        vi.doMock('../utils/formatters.js', () => ({
+          formatDuration: vi.fn(() => '1h 2m 3s')
+        }));
+        
+        // Re-mock HooksManager for this specific test
+        const { HooksManager } = await import('@google/gemini-cli-core');
+        vi.mocked(HooksManager).mockImplementation(() => ({
+          runStop: mockRunStop,
+          getTranscriptPath: mockGetTranscriptPath,
+        }) as any);
+        
+        const quitCommand = createTestCommand({
+          name: 'quit',
+          action: vi.fn().mockResolvedValue({ type: 'quit', messages: [] }),
+        });
+        const result = setupProcessorHook([quitCommand]);
+        
+        await waitFor(() =>
+          expect(result.current.slashCommands).toHaveLength(1),
+        );
+        
+        vi.useFakeTimers();
+        const mockDate = new Date('2025-01-01T01:02:03.000Z');
+        vi.setSystemTime(mockDate);
+        
         try {
           await act(async () => {
-            await result.current.handleSlashCommand('/exit');
+            const promise = result.current.handleSlashCommand('/quit');
+            // Wait for the promise to resolve
+            await promise;
           });
 
+          // Wait a tick for the async IIFE to start
           await act(async () => {
-            await vi.advanceTimersByTimeAsync(200);
+            await Promise.resolve();
+            await Promise.resolve();
           });
 
-          expect(mockSetQuittingMessages).toHaveBeenCalledWith([]);
+          // Now advance timers to complete the exit
+          await act(async () => {
+            await vi.runAllTimersAsync();
+          });
+
+          // Verify HooksManager was instantiated with the config
+          expect(HooksManager).toHaveBeenCalledWith(mockConfig);
+
+          // Verify runStop was called with correct parameters
+          expect(mockRunStop).toHaveBeenCalledWith(
+            'Session ended after 1h 2m 3s',
+            expect.objectContaining({
+              sessionId: 'test-session',
+              transcriptPath: '/tmp/transcript.json',
+            }),
+          );
+
+          // Verify process.exit was called after hooks
           expect(mockProcessExit).toHaveBeenCalledWith(0);
         } finally {
           vi.useRealTimers();
+          vi.doUnmock('../utils/formatters.js');
+        }
+      });
+
+      it('should handle error in runStop hooks gracefully', async () => {
+        // Create mocks for the hooks  
+        const mockRunStop = vi.fn().mockRejectedValue(new Error('Hook failed'));
+        const mockGetTranscriptPath = vi.fn().mockReturnValue('/tmp/transcript.json');
+        
+        // Mock formatDuration
+        vi.doMock('../utils/formatters.js', () => ({
+          formatDuration: vi.fn(() => '1h 2m 3s')
+        }));
+        
+        // Re-mock HooksManager for this specific test
+        const { HooksManager } = await import('@google/gemini-cli-core');
+        vi.mocked(HooksManager).mockImplementation(() => ({
+          runStop: mockRunStop,
+          getTranscriptPath: mockGetTranscriptPath,
+        }) as any);
+        
+        const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        
+        const quitCommand = createTestCommand({
+          name: 'quit', 
+          action: vi.fn().mockResolvedValue({ type: 'quit', messages: [] }),
+        });
+        const result = setupProcessorHook([quitCommand]);
+        
+        await waitFor(() =>
+          expect(result.current.slashCommands).toHaveLength(1),
+        );
+        
+        vi.useFakeTimers();
+        
+        try {
+          await act(async () => {
+            const promise = result.current.handleSlashCommand('/quit');
+            // Wait for the promise to resolve
+            await promise;
+          });
+
+          // Wait a tick for the async IIFE to start
+          await act(async () => {
+            await Promise.resolve();
+            await Promise.resolve();
+          });
+
+          // Now advance timers to complete the exit
+          await act(async () => {
+            await vi.runAllTimersAsync();
+          });
+
+          // Verify error was logged
+          expect(consoleErrorSpy).toHaveBeenCalledWith(
+            'Error running Stop hooks:',
+            expect.any(Error),
+          );
+
+          // Verify process still exits despite hook error
+          expect(mockProcessExit).toHaveBeenCalledWith(0);
+        } finally {
+          consoleErrorSpy.mockRestore();
+          vi.useRealTimers();
+          vi.doUnmock('../utils/formatters.js');
         }
       });
     });
@@ -414,6 +612,176 @@ describe('useSlashCommandProcessor', () => {
         { type: MessageType.USER, text: '/mcpcmd' },
         expect.any(Number),
       );
+    });
+  });
+
+  describe('Shell Command Confirmation Flow', () => {
+    // Use a generic vi.fn() for the action. We will change its behavior in each test.
+    const mockCommandAction = vi.fn();
+
+    const shellCommand = createTestCommand({
+      name: 'shellcmd',
+      action: mockCommandAction,
+    });
+
+    beforeEach(() => {
+      // Reset the mock before each test
+      mockCommandAction.mockClear();
+
+      // Default behavior: request confirmation
+      mockCommandAction.mockResolvedValue({
+        type: 'confirm_shell_commands',
+        commandsToConfirm: ['rm -rf /'],
+        originalInvocation: { raw: '/shellcmd' },
+      } as ConfirmShellCommandsActionReturn);
+    });
+
+    it('should set confirmation request when action returns confirm_shell_commands', async () => {
+      const result = setupProcessorHook([shellCommand]);
+      await waitFor(() => expect(result.current.slashCommands).toHaveLength(1));
+
+      // This is intentionally not awaited, because the promise it returns
+      // will not resolve until the user responds to the confirmation.
+      act(() => {
+        result.current.handleSlashCommand('/shellcmd');
+      });
+
+      // We now wait for the state to be updated with the request.
+      await waitFor(() => {
+        expect(result.current.shellConfirmationRequest).not.toBeNull();
+      });
+
+      expect(result.current.shellConfirmationRequest?.commands).toEqual([
+        'rm -rf /',
+      ]);
+    });
+
+    it('should do nothing if user cancels confirmation', async () => {
+      const result = setupProcessorHook([shellCommand]);
+      await waitFor(() => expect(result.current.slashCommands).toHaveLength(1));
+
+      act(() => {
+        result.current.handleSlashCommand('/shellcmd');
+      });
+
+      // Wait for the confirmation dialog to be set
+      await waitFor(() => {
+        expect(result.current.shellConfirmationRequest).not.toBeNull();
+      });
+
+      const onConfirm = result.current.shellConfirmationRequest?.onConfirm;
+      expect(onConfirm).toBeDefined();
+
+      // Change the mock action's behavior for a potential second run.
+      // If the test is flawed, this will be called, and we can detect it.
+      mockCommandAction.mockResolvedValue({
+        type: 'message',
+        messageType: 'info',
+        content: 'This should not be called',
+      });
+
+      await act(async () => {
+        onConfirm!(ToolConfirmationOutcome.Cancel, []); // Pass empty array for safety
+      });
+
+      expect(result.current.shellConfirmationRequest).toBeNull();
+      // Verify the action was only called the initial time.
+      expect(mockCommandAction).toHaveBeenCalledTimes(1);
+    });
+
+    it('should re-run command with one-time allowlist on "Proceed Once"', async () => {
+      const result = setupProcessorHook([shellCommand]);
+      await waitFor(() => expect(result.current.slashCommands).toHaveLength(1));
+
+      act(() => {
+        result.current.handleSlashCommand('/shellcmd');
+      });
+      await waitFor(() => {
+        expect(result.current.shellConfirmationRequest).not.toBeNull();
+      });
+
+      const onConfirm = result.current.shellConfirmationRequest?.onConfirm;
+
+      // **Change the mock's behavior for the SECOND run.**
+      // This is the key to testing the outcome.
+      mockCommandAction.mockResolvedValue({
+        type: 'message',
+        messageType: 'info',
+        content: 'Success!',
+      });
+
+      await act(async () => {
+        onConfirm!(ToolConfirmationOutcome.ProceedOnce, ['rm -rf /']);
+      });
+
+      expect(result.current.shellConfirmationRequest).toBeNull();
+
+      // The action should have been called twice (initial + re-run).
+      await waitFor(() => {
+        expect(mockCommandAction).toHaveBeenCalledTimes(2);
+      });
+
+      // We can inspect the context of the second call to ensure the one-time list was used.
+      const secondCallContext = mockCommandAction.mock
+        .calls[1][0] as CommandContext;
+      expect(
+        secondCallContext.session.sessionShellAllowlist.has('rm -rf /'),
+      ).toBe(true);
+
+      // Verify the final success message was added.
+      expect(mockAddItem).toHaveBeenCalledWith(
+        { type: MessageType.INFO, text: 'Success!' },
+        expect.any(Number),
+      );
+
+      // Verify the session-wide allowlist was NOT permanently updated.
+      // Re-render the hook by calling a no-op command to get the latest context.
+      await act(async () => {
+        result.current.handleSlashCommand('/no-op');
+      });
+      const finalContext = result.current.commandContext;
+      expect(finalContext.session.sessionShellAllowlist.size).toBe(0);
+    });
+
+    it('should re-run command and update session allowlist on "Proceed Always"', async () => {
+      const result = setupProcessorHook([shellCommand]);
+      await waitFor(() => expect(result.current.slashCommands).toHaveLength(1));
+
+      act(() => {
+        result.current.handleSlashCommand('/shellcmd');
+      });
+      await waitFor(() => {
+        expect(result.current.shellConfirmationRequest).not.toBeNull();
+      });
+
+      const onConfirm = result.current.shellConfirmationRequest?.onConfirm;
+      mockCommandAction.mockResolvedValue({
+        type: 'message',
+        messageType: 'info',
+        content: 'Success!',
+      });
+
+      await act(async () => {
+        onConfirm!(ToolConfirmationOutcome.ProceedAlways, ['rm -rf /']);
+      });
+
+      expect(result.current.shellConfirmationRequest).toBeNull();
+      await waitFor(() => {
+        expect(mockCommandAction).toHaveBeenCalledTimes(2);
+      });
+
+      expect(mockAddItem).toHaveBeenCalledWith(
+        { type: MessageType.INFO, text: 'Success!' },
+        expect.any(Number),
+      );
+
+      // Check that the session-wide allowlist WAS updated.
+      await waitFor(() => {
+        const finalContext = result.current.commandContext;
+        expect(finalContext.session.sessionShellAllowlist.has('rm -rf /')).toBe(
+          true,
+        );
+      });
     });
   });
 
@@ -583,7 +951,7 @@ describe('useSlashCommandProcessor', () => {
   });
 
   describe('Lifecycle', () => {
-    it('should abort command loading when the hook unmounts', async () => {
+    it('should abort command loading when the hook unmounts', () => {
       const abortSpy = vi.spyOn(AbortController.prototype, 'abort');
       const { unmount } = renderHook(() =>
         useSlashCommandProcessor(
@@ -597,10 +965,11 @@ describe('useSlashCommandProcessor', () => {
           vi.fn(), // onDebugMessage
           vi.fn(), // openThemeDialog
           mockOpenAuthDialog,
-          vi.fn(), // openEditorDialog
+          vi.fn(), // openEditorDialog,
           vi.fn(), // toggleCorgiMode
           mockSetQuittingMessages,
           vi.fn(), // openPrivacyNotice
+          vi.fn(), // toggleVimEnabled
         ),
       );
 
