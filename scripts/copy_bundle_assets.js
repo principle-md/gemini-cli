@@ -17,7 +17,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { copyFileSync, existsSync, mkdirSync } from 'fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join, basename } from 'path';
 import { fileURLToPath } from 'url';
 import { glob } from 'glob';
@@ -43,6 +43,16 @@ const vsixFiles = glob.sync('packages/vscode-ide-companion/*.vsix', {
 });
 for (const file of vsixFiles) {
   copyFileSync(join(root, file), join(bundleDir, basename(file)));
+}
+
+// Add shebang to the bundled CLI file
+const cliBundlePath = join(bundleDir, 'gemini.mjs');
+if (existsSync(cliBundlePath)) {
+  const content = readFileSync(cliBundlePath, 'utf8');
+  if (!content.startsWith('#!/usr/bin/env node')) {
+    writeFileSync(cliBundlePath, `#!/usr/bin/env node\n${content}`);
+    console.log('Added shebang to gemini.mjs');
+  }
 }
 
 console.log('Assets copied to bundle/');
