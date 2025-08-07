@@ -86,6 +86,7 @@ describe('HooksManager', () => {
         responseParts: [],
         resultDisplay: 'File read successfully',
         error: undefined,
+        errorType: undefined,
       };
 
       // This should execute the hook for read_file without throwing
@@ -108,6 +109,7 @@ describe('HooksManager', () => {
         responseParts: [],
         resultDisplay: 'Tool executed',
         error: undefined,
+        errorType: undefined,
       };
 
       // This should not execute any hooks
@@ -147,6 +149,7 @@ describe('HooksManager', () => {
         responseParts: [],
         resultDisplay: 'File read successfully',
         error: undefined,
+        errorType: undefined,
       };
 
       // Test that the hook data structure includes required fields
@@ -279,6 +282,7 @@ describe('HooksManager', () => {
         responseParts: [],
         resultDisplay: 'Test tool executed',
         error: undefined,
+        errorType: undefined,
       };
 
       // Execute the hook

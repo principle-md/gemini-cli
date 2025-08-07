@@ -105,6 +105,7 @@ export async function executeToolCall(
         ],
         resultDisplay: error.message,
         error,
+        errorType: ToolErrorType.HOOK_BLOCKED,
       };
     }
 
