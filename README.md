@@ -302,6 +302,65 @@ Use MCP servers to integrate your local system tools with your enterprise collab
 
 Head over to the [Uninstall](docs/Uninstall.md) guide for uninstallation instructions.
 
+## Fork Build & Release Process
+
+This fork maintains a feature branch (`add-hooks-feature`) that is continuously rebased on the upstream `main` branch to stay in sync with the original Google Gemini CLI project.
+
+### Building the Project
+
+1. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+2. **Build packages:**
+   ```bash
+   npm run build:packages
+   ```
+
+3. **Create the distributable bundle:**
+   ```bash
+   node esbuild.config.js
+   ```
+   This creates `bundle/gemini.mjs` - a self-contained executable that users can run with Node.js.
+
+### Creating Releases
+
+1. **Rebase on upstream main:**
+   ```bash
+   git fetch upstream main
+   git rebase upstream/main
+   ```
+
+2. **Resolve any conflicts and push:**
+   ```bash
+   git push --force-with-lease origin add-hooks-feature
+   ```
+
+3. **Build the bundle:**
+   ```bash
+   npm run build:packages
+   node esbuild.config.js
+   ```
+
+4. **Create a GitHub release:**
+   ```bash
+   gh release create v0.X.X bundle/gemini.mjs \
+     --title "v0.X.X - Release Title" \
+     --notes "Release notes here" \
+     --target add-hooks-feature \
+     --latest
+   ```
+
+The release will include the `gemini.mjs` file that users can download and run directly.
+
+### Using Released Versions
+
+Users can download the `gemini.mjs` file from the [Releases](https://github.com/principle-md/gemini-cli/releases) page and run:
+```bash
+node gemini.mjs
+```
+
 ## Terms of Service and Privacy Notice
 
 For details on the terms of service and privacy notice applicable to your use of Gemini CLI, see the [Terms of Service and Privacy Notice](./docs/tos-privacy.md).
