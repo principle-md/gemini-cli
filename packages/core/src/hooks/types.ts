@@ -112,6 +112,7 @@ export interface BaseHookInput {
   transcript_path?: string;
   hook_event_name: HookEventName;
   agent_type: string;
+  cwd: string;
   metadata?: {
     timestamp: number;
     user?: string;

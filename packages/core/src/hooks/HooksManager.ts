@@ -230,11 +230,12 @@ export class HooksManager {
       .map((result) => result.value);
   }
 
-  private createBaseHookInput(context: HookExecutionContext): Pick<import('./types.js').BaseHookInput, 'session_id' | 'transcript_path' | 'agent_type' | 'metadata'> {
+  private createBaseHookInput(context: HookExecutionContext): Pick<import('./types.js').BaseHookInput, 'session_id' | 'transcript_path' | 'agent_type' | 'cwd' | 'metadata'> {
     return {
       session_id: context.sessionId,
       transcript_path: context.transcriptPath,
       agent_type: 'gemini',
+      cwd: this.config.getWorkingDir(),
       metadata: {
         timestamp: Date.now(),
         user: os.userInfo().username,
