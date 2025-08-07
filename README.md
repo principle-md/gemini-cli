@@ -1,10 +1,12 @@
-# Gemini CLI
+# Gemini CLI - Enhanced Fork with Hooks System
 
 [![Gemini CLI CI](https://github.com/google-gemini/gemini-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/google-gemini/gemini-cli/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/npm/v/@google/gemini-cli)](https://www.npmjs.com/package/@google/gemini-cli)
 [![License](https://img.shields.io/github/license/google-gemini/gemini-cli)](https://github.com/google-gemini/gemini-cli/blob/main/LICENSE)
 
 ![Gemini CLI Screenshot](./docs/assets/gemini-screenshot.png)
+
+> **🚀 This fork adds a powerful hooks system to Gemini CLI!** Configure PreToolUse, PostToolUse, and Stop hooks to extend functionality. Use **[Specktor](https://principle-md.com)** for easy installation and hook management through a user-friendly interface.
 
 Gemini CLI is an open-source AI agent that brings the power of Gemini directly into your terminal. It provides lightweight access to Gemini, giving you the most direct path from your prompt to our model.
 
@@ -412,6 +414,19 @@ Check our [Official Roadmap](https://github.com/orgs/google-gemini/projects/11/)
 ### Uninstall
 
 See the [Uninstall Guide](docs/Uninstall.md) for removal instructions.
+
+## Specktor - Easy Hook Management
+
+**[Specktor](https://principle-md.com)** is a tool that manages your installation of this enhanced version of Gemini CLI and provides an intuitive interface for configuring hooks! Instead of manually editing JSON files, Specktor lets you:
+
+- **Install and update** this fork automatically
+- **Configure hooks** through a user-friendly interface
+- **Manage hook scripts** without dealing with file paths and permissions
+- **Monitor hook execution** and debug issues easily
+
+Visit [principle-md.com](https://principle-md.com) to learn more and get started with Specktor!
+
+---
 
 ## Fork Build & Release Process
 
