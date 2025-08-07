@@ -1,8 +1,10 @@
-# Gemini CLI
+# Gemini CLI - Enhanced Fork with Hooks System
 
 [![Gemini CLI CI](https://github.com/google-gemini/gemini-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/google-gemini/gemini-cli/actions/workflows/ci.yml)
 
 ![Gemini CLI Screenshot](./docs/assets/gemini-screenshot.png)
+
+> **🚀 This fork adds a powerful hooks system to Gemini CLI!** Configure PreToolUse, PostToolUse, and Stop hooks to extend functionality. Use **[Specktor](https://principle-md.com)** for easy installation and hook management through a user-friendly interface.
 
 This repository contains the Gemini CLI, a command-line AI workflow tool that connects to your
 tools, understands your code and accelerates your workflows.
@@ -301,6 +303,19 @@ Use MCP servers to integrate your local system tools with your enterprise collab
 ### Uninstall
 
 Head over to the [Uninstall](docs/Uninstall.md) guide for uninstallation instructions.
+
+## Specktor - Easy Hook Management
+
+**[Specktor](https://principle-md.com)** is a tool that manages your installation of this enhanced version of Gemini CLI and provides an intuitive interface for configuring hooks! Instead of manually editing JSON files, Specktor lets you:
+
+- **Install and update** this fork automatically
+- **Configure hooks** through a user-friendly interface
+- **Manage hook scripts** without dealing with file paths and permissions
+- **Monitor hook execution** and debug issues easily
+
+Visit [principle-md.com](https://principle-md.com) to learn more and get started with Specktor!
+
+---
 
 ## Fork Build & Release Process
 
