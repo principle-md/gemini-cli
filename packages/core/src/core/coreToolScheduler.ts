@@ -565,6 +565,7 @@ export class CoreToolScheduler {
             createErrorResponse(
               reqInfo,
               new Error(`Hook blocked execution: ${hookResult.blockReason}`),
+              ToolErrorType.HOOK_BLOCKED,
             ),
           );
           continue;

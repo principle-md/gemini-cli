@@ -104,6 +104,7 @@ export async function executeToolCall(
         ],
         resultDisplay: error.message,
         error,
+        errorType: ToolErrorType.TOOL_NOT_REGISTERED,
       };
     }
 

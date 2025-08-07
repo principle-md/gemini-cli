@@ -76,15 +76,6 @@ export interface HookMatcher {
   hooks: HookConfig[];
 }
 
-export interface HooksConfiguration {
-  PreToolUse?: HookMatcher[];
-  PostToolUse?: HookMatcher[];
-  Notification?: HookMatcher[];
-  Stop?: HookMatcher[];
-  SubagentStop?: HookMatcher[];
-  PreCompact?: HookMatcher[];
-}
-
 export interface Settings {
   theme?: string;
   customThemes?: Record<string, CustomTheme>;

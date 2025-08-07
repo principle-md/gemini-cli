@@ -13,6 +13,7 @@ export enum ToolErrorType {
   UNKNOWN = 'unknown',
   UNHANDLED_EXCEPTION = 'unhandled_exception',
   TOOL_NOT_REGISTERED = 'tool_not_registered',
+  HOOK_BLOCKED = 'hook_blocked',
 
   // File System Errors
   FILE_NOT_FOUND = 'file_not_found',
