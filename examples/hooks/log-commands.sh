@@ -4,9 +4,10 @@
 # Read JSON input from stdin
 input=$(cat)
 
-# Extract tool name and command using jq
+# Extract tool name, command, and cwd using jq
 tool_name=$(echo "$input" | jq -r '.tool_name')
 hook_event=$(echo "$input" | jq -r '.hook_event_name')
+cwd=$(echo "$input" | jq -r '.cwd')
 
 # Log file location
 log_file="$HOME/.gemini/command-history.log"
@@ -20,8 +21,8 @@ if [[ "$hook_event" == "PreToolUse" ]] && [[ "$tool_name" == "run_shell_command"
     command=$(echo "$input" | jq -r '.tool_input.command // "N/A"')
     description=$(echo "$input" | jq -r '.tool_input.description // "No description"')
     
-    # Log the command
-    echo "[$timestamp] PreToolUse - Shell command: $command - $description" >> "$log_file"
+    # Log the command with working directory
+    echo "[$timestamp] PreToolUse - Shell command: $command - $description (cwd: $cwd)" >> "$log_file"
     
     # Check for potentially dangerous commands
     if [[ "$command" =~ rm\ -rf|sudo\ rm|format|mkfs ]]; then

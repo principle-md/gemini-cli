@@ -79,10 +79,18 @@ Hooks receive JSON input via stdin containing:
   "session_id": "unique-session-id",
   "transcript_path": "/path/to/transcript.json",
   "hook_event_name": "PreToolUse",
+  "cwd": "/current/working/directory",
   "tool_name": "Shell",
   "tool_input": {
     "command": "ls -la",
     "description": "List files"
+  },
+  "metadata": {
+    "timestamp": 1234567890,
+    "user": "username",
+    "hostname": "machine-name",
+    "platform": "darwin",
+    "nodeVersion": "v20.0.0"
   }
 }
 ```
