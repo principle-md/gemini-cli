@@ -30,6 +30,7 @@ import {
   modifyWithEditor,
 } from '../tools/modifiable-tool.js';
 import * as Diff from 'diff';
+import { HooksManager, HookExecutionContext } from '../hooks/index.js';
 
 export type ValidatingToolCall = {
   status: 'validating';
@@ -252,6 +253,7 @@ export class CoreToolScheduler {
     resolve: () => void;
     reject: (reason?: Error) => void;
   }> = [];
+  private hooksManager: HooksManager;
 
   constructor(options: CoreToolSchedulerOptions) {
     this.config = options.config;
@@ -261,6 +263,7 @@ export class CoreToolScheduler {
     this.onToolCallsUpdate = options.onToolCallsUpdate;
     this.getPreferredEditor = options.getPreferredEditor;
     this.onEditorClose = options.onEditorClose;
+    this.hooksManager = new HooksManager(this.config);
   }
 
   private setStatusInternal(
@@ -591,6 +594,31 @@ export class CoreToolScheduler {
         const { request: reqInfo, invocation } = toolCall;
 
         try {
+          // Run PreToolUse hooks
+          const hookContext: HookExecutionContext = {
+            sessionId: this.config.getSessionId(),
+            transcriptPath: this.hooksManager.getTranscriptPath(),
+          };
+          
+          const hookResult = await this.hooksManager.runPreToolUse(
+            reqInfo,
+            hookContext,
+            signal,
+          );
+
+          if (hookResult.shouldBlock) {
+            this.setStatusInternal(
+              reqInfo.callId,
+              'error',
+              createErrorResponse(
+                reqInfo,
+                new Error(`Hook blocked execution: ${hookResult.blockReason}`),
+                ToolErrorType.HOOK_BLOCKED,
+              ),
+            );
+            continue;
+          }
+
           if (signal.aborted) {
             this.setStatusInternal(
               reqInfo.callId,
@@ -854,6 +882,19 @@ export class CoreToolScheduler {
                 errorType: undefined,
               };
               this.setStatusInternal(callId, 'success', successResponse);
+
+              // Run PostToolUse hooks
+              const hookContext: HookExecutionContext = {
+                sessionId: this.config.getSessionId(),
+                transcriptPath: this.hooksManager.getTranscriptPath(),
+              };
+              
+              await this.hooksManager.runPostToolUse(
+                scheduledCall.request,
+                successResponse,
+                hookContext,
+                signal,
+              );
             } else {
               // It is a failure
               const error = new Error(toolResult.error.message);
@@ -863,19 +904,44 @@ export class CoreToolScheduler {
                 toolResult.error.type,
               );
               this.setStatusInternal(callId, 'error', errorResponse);
+
+              // Run PostToolUse hooks for errors too
+              const hookContext: HookExecutionContext = {
+                sessionId: this.config.getSessionId(),
+                transcriptPath: this.hooksManager.getTranscriptPath(),
+              };
+              
+              await this.hooksManager.runPostToolUse(
+                scheduledCall.request,
+                errorResponse,
+                hookContext,
+                signal,
+              );
             }
           })
-          .catch((executionError: Error) => {
-            this.setStatusInternal(
-              callId,
-              'error',
-              createErrorResponse(
-                scheduledCall.request,
-                executionError instanceof Error
-                  ? executionError
-                  : new Error(String(executionError)),
-                ToolErrorType.UNHANDLED_EXCEPTION,
-              ),
+          .catch(async (executionError: Error) => {
+            const errorResponse = createErrorResponse(
+              scheduledCall.request,
+              executionError instanceof Error
+                ? executionError
+                : new Error(String(executionError)),
+              ToolErrorType.UNHANDLED_EXCEPTION,
+            );
+            
+            this.setStatusInternal(callId, 'error', errorResponse);
+
+            // Run PostToolUse hooks for errors too
+            const hookContext: HookExecutionContext = {
+              sessionId: this.config.getSessionId(),
+              transcriptPath: this.hooksManager.getTranscriptPath(),
+            };
+            
+            
+            await this.hooksManager.runPostToolUse(
+              scheduledCall.request,
+              errorResponse,
+              hookContext,
+              signal,
             );
           });
       });

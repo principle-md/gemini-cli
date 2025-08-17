@@ -1,0 +1,47 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "run_shell_command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./examples/hooks/log-commands.sh",
+            "timeout": 5000
+          }
+        ]
+      },
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo \"Tool ${tool_name} is about to execute\" | jq -R '{message: .}'"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "run_shell_command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./examples/hooks/log-commands.sh",
+            "timeout": 5000
+          }
+        ]
+      },
+      {
+        "matcher": "replace|write_file",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./examples/hooks/enforce-formatting.sh",
+            "timeout": 10000
+          }
+        ]
+      }
+    ]
+  }
+}

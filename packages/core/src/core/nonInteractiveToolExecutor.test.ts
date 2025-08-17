@@ -19,6 +19,8 @@ const mockConfig = {
   getSessionId: () => 'test-session-id',
   getUsageStatisticsEnabled: () => true,
   getDebugMode: () => false,
+  getHooks: () => ({}),  // Empty hooks by default
+  getProjectTempDir: () => '/tmp',
 } as unknown as Config;
 
 describe('executeToolCall', () => {
@@ -229,5 +231,53 @@ describe('executeToolCall', () => {
       },
       imageDataPart,
     ]);
+  });
+
+  it('should call hooks during tool execution', async () => {
+    // Mock config with hooks enabled
+    const mockConfigWithHooks = {
+      ...mockConfig,
+      getHooks: () => ({
+        PostToolUse: [
+          {
+            matcher: 'testTool',
+            hooks: [
+              {
+                type: 'command' as const,
+                command: '/bin/echo "hook called"',
+              }
+            ]
+          }
+        ]
+      }),
+    } as unknown as Config;
+
+    const request: ToolCallRequestInfo = {
+      callId: 'call1',
+      name: 'testTool',
+      args: { param1: 'value1' },
+      isClientInitiated: false,
+      prompt_id: 'prompt-id-1',
+    };
+    const toolResult: ToolResult = {
+      llmContent: 'Tool executed successfully',
+      returnDisplay: 'Success!',
+    };
+    vi.mocked(mockToolRegistry.getTool).mockReturnValue(mockTool);
+    vi.mocked(mockTool.executeFn).mockResolvedValue(toolResult);
+
+    const response = await executeToolCall(
+      mockConfigWithHooks,
+      request,
+      mockToolRegistry,
+      abortController.signal,
+    );
+
+    expect(response.callId).toBe('call1');
+    expect(response.error).toBeUndefined();
+    expect(mockTool.executeFn).toHaveBeenCalledWith(
+      { param1: 'value1' },
+      abortController.signal,
+    );
   });
 });

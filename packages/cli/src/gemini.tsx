@@ -283,6 +283,7 @@ export async function main() {
             settings={settings}
             startupWarnings={startupWarnings}
             version={version}
+            resumeId={argv.resume}
           />
         </SettingsContext.Provider>
       </React.StrictMode>,
