@@ -269,9 +269,6 @@ export async function main() {
     ...(await getUserStartupWarnings(workspaceRoot)),
   ];
 
-  const shouldBeInteractive =
-    !!argv.promptInteractive || !!argv.resume || (process.stdin.isTTY && input?.length === 0);
-
   // Render UI, passing necessary config values. Check that there is no command line question.
   if (config.isInteractive()) {
     const version = await getCliVersion();

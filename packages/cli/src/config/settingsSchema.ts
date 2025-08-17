@@ -432,6 +432,15 @@ export const SETTINGS_SCHEMA = {
     description: 'Additional directories to include in the workspace context.',
     showInDialog: false,
   },
+  hooks: {
+    type: 'object',
+    label: 'Hooks Configuration',
+    category: 'Advanced',
+    requiresRestart: false,
+    default: undefined as any,
+    description: 'Configuration for CLI hooks system.',
+    showInDialog: false,
+  },
   loadMemoryFromIncludeDirectories: {
     type: 'boolean',
     label: 'Load Memory From Include Directories',

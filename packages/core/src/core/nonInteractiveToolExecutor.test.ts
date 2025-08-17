@@ -264,7 +264,7 @@ describe('executeToolCall', () => {
       returnDisplay: 'Success!',
     };
     vi.mocked(mockToolRegistry.getTool).mockReturnValue(mockTool);
-    vi.mocked(mockTool.execute).mockResolvedValue(toolResult);
+    vi.mocked(mockTool.executeFn).mockResolvedValue(toolResult);
 
     const response = await executeToolCall(
       mockConfigWithHooks,
@@ -275,7 +275,7 @@ describe('executeToolCall', () => {
 
     expect(response.callId).toBe('call1');
     expect(response.error).toBeUndefined();
-    expect(mockTool.execute).toHaveBeenCalledWith(
+    expect(mockTool.executeFn).toHaveBeenCalledWith(
       { param1: 'value1' },
       abortController.signal,
     );

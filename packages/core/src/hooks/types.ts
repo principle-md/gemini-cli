@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ToolCallRequestInfo, ToolCallResponseInfo } from '../index.js';
+// Import types for hook input definitions
 
 export enum HookEventName {
   // Tool Events
